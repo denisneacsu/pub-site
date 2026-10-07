@@ -250,6 +250,76 @@ def recent_changes(count=8):
     )
 
 
+def head():
+    return git("rev-parse", "HEAD")
+
+
+def fetch_origin():
+    """Scarica le novità da GitHub senza toccare i file; restituisce origin/main."""
+
+    git("fetch", "--quiet", "origin")
+
+    return git("rev-parse", "origin/main")
+
+
+def is_ancestor(older, newer):
+
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", older, newer],
+        cwd=SITE,
+        capture_output=True,
+    )
+
+    return result.returncode == 0
+
+
+def commits_between(older, newer):
+    """Commit da older (escluso) a newer, dal più vecchio, con i file toccati."""
+
+    out = git(
+        "log", "--reverse", f"{older}..{newer}",
+        "--format=%x1e%h%x09%an%x09%s", "--name-only",
+    )
+
+    commits = []
+
+    for block in out.split("\x1e"):
+
+        lines = [line for line in block.strip().splitlines() if line]
+
+        if not lines:
+            continue
+
+        sha, author, subject = lines[0].split("\t", 2)
+
+        commits.append({
+            "sha": sha,
+            "author": author,
+            "subject": subject,
+            "files": lines[1:],
+        })
+
+    return commits
+
+
+# =========================================================
+# STATO DEL BOT (versione notificata, ultime modifiche viste)
+# =========================================================
+
+STATE_FILE = BOT_HOME / "state.json"
+
+
+def read_state():
+    try:
+        return json.loads(STATE_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def write_state(state):
+    STATE_FILE.write_text(json.dumps(state, indent=4) + "\n")
+
+
 # =========================================================
 # MODIFICHE
 # =========================================================

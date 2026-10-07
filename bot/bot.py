@@ -82,6 +82,12 @@ AUTH = filters.User(user_id=ALLOWED)
 
 SITE_URL = "https://memphisristopub.it"
 
+# Versione del codice in esecuzione (il servizio fa git pull prima dell'avvio)
+RUNNING_VERSION = core.head()
+
+# Ogni quanto controllare se il sito è stato modificato da fuori
+SITE_CHECK_SECONDS = 180
+
 
 # =========================================================
 # TASTIERE
@@ -1383,6 +1389,87 @@ async def on_error(update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+# =========================================================
+# NOTIFICHE: bot aggiornato, sito modificato da fuori
+# =========================================================
+
+async def notify_all(bot, text):
+
+    for user_id in ALLOWED:
+        try:
+            await bot.send_message(
+                user_id, text, parse_mode="HTML", disable_web_page_preview=True,
+            )
+        except Exception:
+            log.warning("Notifica non consegnata a %s", user_id)
+
+
+def bot_changes():
+    """Novità del bot dall'ultima versione notificata (None se nulla da dire)."""
+
+    state = core.read_state()
+    last = state.get("bot_version")
+
+    state["bot_version"] = RUNNING_VERSION
+    core.write_state(state)
+
+    if last == RUNNING_VERSION:
+        return None
+
+    if last and core.is_ancestor(last, RUNNING_VERSION):
+        commits = core.commits_between(last, RUNNING_VERSION)
+    else:
+        # Prima volta (o cronologia riscritta): solo l'ultima novità
+        commits = core.commits_between(f"{RUNNING_VERSION}~1", RUNNING_VERSION)
+
+    return [c["subject"] for c in commits if any(f.startswith("bot/") for f in c["files"])]
+
+
+def is_site_change(commit):
+    """Commit che cambia il sito visibile (non solo bot, script o file tecnici)."""
+
+    technical = ("bot/", "tools/", "CNAME", ".gitignore", ".nojekyll")
+
+    return commit["author"] != core.BOT_AUTHOR and any(
+        not f.startswith(technical) for f in commit["files"]
+    )
+
+
+def site_changes():
+    """Modifiche al sito fatte fuori dal bot dall'ultimo controllo."""
+
+    state = core.read_state()
+    last = state.get("site_seen")
+    current = core.fetch_origin()
+
+    state["site_seen"] = current
+    core.write_state(state)
+
+    if not last or last == current or not core.is_ancestor(last, current):
+        return []
+
+    return [c for c in core.commits_between(last, current) if is_site_change(c)]
+
+
+async def check_site(context: ContextTypes.DEFAULT_TYPE):
+
+    try:
+        commits = await in_repo(site_changes)
+    except Exception:
+        log.exception("Controllo modifiche al sito fallito")
+        return
+
+    if not commits:
+        return
+
+    lines = "\n".join(f"• {esc(c['subject'])} <i>({esc(c['author'])})</i>" for c in commits[-10:])
+
+    await notify_all(
+        context.bot,
+        f"🌐 <b>Sito aggiornato</b>\n{lines}\n\nSarà visibile tra 1-2 minuti: {SITE_URL}",
+    )
+
+
 async def post_init(app: Application):
 
     await app.bot.set_my_commands([
@@ -1394,6 +1481,15 @@ async def post_init(app: Application):
         BotCommand("aiuto", "Come si usa"),
         BotCommand("stop", "Interrompe la domanda in corso"),
     ])
+
+    news = await in_repo(bot_changes)
+
+    if news:
+        lines = "\n".join(f"• {esc(subject)}" for subject in news[-10:])
+        await notify_all(app.bot, f"🔄 <b>Bot aggiornato</b>\n{lines}\n\nScrivi /start se non vedi i pulsanti nuovi.")
+
+    # Il primo controllo segnala anche le modifiche fatte mentre il bot era spento
+    app.job_queue.run_repeating(check_site, interval=SITE_CHECK_SECONDS, first=20)
 
 
 def main():
