@@ -298,7 +298,8 @@ def apply_change(change):
             })
             message = f"Evento: {change['title']} ({format_date(change['date'])})"
         else:
-            events.append({
+            # Le promozioni nuove vanno per prime
+            events.insert(0, {
                 "type": "promo",
                 "title": change["title"],
                 "image": image,

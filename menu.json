@@ -21,32 +21,15 @@
                     "id": "piatti",
                     "title": "Piatti",
                     "items": [
-                        {
-                            "name": "Piatto Hamburger",
-                            "description": "Hamburger di Fassona 200 g con cheddar, bacon e granella di cipolla fritta. Servito con patatine.",
-                            "price": 16,
-                            "featured": true
-                        },
-                        {
-                            "name": "Piatto Hamburger senza pane",
-                            "description": "Hamburger di Fassona 200 g con cheddar, bacon e granella di cipolla fritta. Servito con patatine.",
-                            "price": 14
-                        },
-                        {
-                            "name": "Solo Hamburger",
-                            "description": "Hamburger di Fassona 200 g.",
-                            "price": 10
-                        },
+                        { "name": "Piatto Hamburger", "description": "Hamburger di Fassona 200 g con cheddar, bacon e granella di cipolla fritta. Servito con patatine.", "price": 16, "featured": true },
+                        { "name": "Piatto Hamburger senza pane", "description": "Hamburger di Fassona 200 g con cheddar, bacon e granella di cipolla fritta. Servito con patatine.", "price": 14 },
+                        { "name": "Solo Hamburger", "description": "Hamburger di Fassona 200 g.", "price": 10 },
                         { "name": "Tagliata", "price": 20 },
                         { "name": "Picanha", "price": 22, "featured": true },
                         { "name": "Pinsa Margherita", "price": 7 },
                         { "name": "Pinsa con condimenti", "price": 10 },
                         { "name": "Porchetta alla piastra", "price": 12 },
-                        {
-                            "name": "Salsiccia alla griglia",
-                            "description": "Servita con insalata o patatine.",
-                            "price": 14
-                        },
+                        { "name": "Salsiccia alla griglia", "description": "Servita con insalata o patatine.", "price": 14 },
                         { "name": "Milanese con patatine", "price": 15 }
                     ]
                 },
@@ -54,37 +37,12 @@
                     "id": "panini",
                     "title": "Panini",
                     "items": [
-                        {
-                            "name": "Grifondoro",
-                            "description": "Cotoletta, maionese, insalata e pomodoro.",
-                            "price": 7,
-                            "featured": true
-                        },
-                        {
-                            "name": "Sirius Black",
-                            "description": "Speck, brie e crema di tartufo.",
-                            "price": 7
-                        },
-                        {
-                            "name": "Piton",
-                            "description": "Salsiccia e crauti.",
-                            "price": 6.5
-                        },
-                        {
-                            "name": "Hagrid",
-                            "description": "Porchetta, insalata, maionese e pomodoro.",
-                            "price": 6.5
-                        },
-                        {
-                            "name": "Silente",
-                            "description": "Cotto o crudo, rucola e stracchino.",
-                            "price": 5.5
-                        },
-                        {
-                            "name": "Dobby",
-                            "description": "Cotto e formaggio.",
-                            "price": 5
-                        }
+                        { "name": "Grifondoro", "description": "Cotoletta, maionese, insalata e pomodoro.", "price": 7, "featured": true },
+                        { "name": "Sirius Black", "description": "Speck, brie e crema di tartufo.", "price": 7 },
+                        { "name": "Piton", "description": "Salsiccia e crauti.", "price": 6.5 },
+                        { "name": "Hagrid", "description": "Porchetta, insalata, maionese e pomodoro.", "price": 6.5 },
+                        { "name": "Silente", "description": "Cotto o crudo, rucola e stracchino.", "price": 5.5 },
+                        { "name": "Dobby", "description": "Cotto e formaggio.", "price": 5 }
                     ]
                 }
             ]
@@ -102,11 +60,7 @@
                         { "name": "Leffe Ambrée", "prices": [4, 7] },
                         { "name": "Goose IPA", "prices": [null, 5] },
                         { "name": "Stella Artois", "prices": [3.5, 6] },
-                        {
-                            "name": "Panaché",
-                            "description": "Stella Artois con gazzosa o Sprite.",
-                            "prices": [3.5, 6]
-                        },
+                        { "name": "Panaché", "description": "Stella Artois con gazzosa o Sprite.", "prices": [3.5, 6] },
                         { "name": "Tennent's", "prices": [4, null] },
                         { "name": "Corona", "prices": [4, null] },
                         { "name": "Ceres", "prices": [4, null] }
