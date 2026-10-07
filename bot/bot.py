@@ -948,9 +948,12 @@ async def handle_price(update, context, step, ctx, raw):
     expected = len(columns) if columns else 1
 
     if tokens or len(prices) != expected:
-        problem = f"Mi servono {expected} prezzi." if expected > 1 else "Non ho capito il prezzo."
+        problem = (
+            f"Mi servono {expected} prezzi ({' e '.join(columns)}), es. 4 7."
+            if columns else "Non ho capito il prezzo, es. 6,50."
+        )
         return await update.effective_message.reply_text(
-            f"{problem} Riprova (es. 6,50), oppure premi ✖️ Annulla."
+            f"{problem} Riprova, oppure premi ✖️ Annulla."
         )
 
     value = {"prices": prices} if columns else {"price": prices[0]}
