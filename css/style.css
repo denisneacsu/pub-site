@@ -461,6 +461,58 @@ p {
 }
 
 
+/* Badge "Aperto ora / Chiuso" (js/hours.js) */
+
+.open-status {
+    display: inline-flex;
+    align-items: center;
+
+    gap: 8px;
+
+    margin-bottom: 18px;
+    padding: 6px 12px;
+
+    border: 1px solid var(--border-light);
+    border-radius: 999px;
+
+    background: rgba(10, 9, 8, 0.55);
+
+    color: var(--text);
+
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+
+.open-status[hidden] {
+    display: none;
+}
+
+
+.open-status::before {
+    content: "";
+
+    width: 8px;
+    height: 8px;
+
+    border-radius: 50%;
+
+    background: var(--text-muted);
+}
+
+
+.open-status.is-open::before {
+    background: #5cc46a;
+
+    box-shadow: 0 0 0 3px rgba(92, 196, 106, 0.2);
+}
+
+
+.contact-box .open-status {
+    margin: 4px 0 0;
+}
+
+
 /* =========================================================
    9. NEXT EVENT
 ========================================================= */

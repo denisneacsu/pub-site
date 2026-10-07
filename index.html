@@ -12,6 +12,61 @@
         content="MEMPHIS① — birreria e cucina a Mercenasco. Birre, panini, carne, fritti, cocktail e serate in compagnia."
     >
 
+
+    <link rel="canonical" href="https://memphisristopub.it/">
+
+    <!-- Anteprima quando il link viene condiviso (WhatsApp, Facebook...) -->
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="it_IT">
+    <meta property="og:site_name" content="MEMPHIS①">
+    <meta property="og:title" content="MEMPHIS① | Birreria e cucina a Mercenasco">
+    <meta property="og:description" content="Birre alla spina, hamburger, panini, cocktail e serate in compagnia. Via Roma 17, Mercenasco (TO). Aperto dal martedì alla domenica dalle 17:00.">
+    <meta property="og:url" content="https://memphisristopub.it/">
+    <meta property="og:image" content="https://memphisristopub.it/images/og-image.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png">
+    <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+    <meta name="theme-color" content="#11100f">
+
+    <!-- Scheda per Google: indirizzo, orari, contatti -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BarOrPub",
+        "name": "Memphis 1 Ristopub",
+        "alternateName": "MEMPHIS①",
+        "url": "https://memphisristopub.it/",
+        "image": "https://memphisristopub.it/images/og-image.jpg",
+        "logo": "https://memphisristopub.it/images/icon-512.png",
+        "telephone": "+39 371 495 2872",
+        "servesCuisine": ["Hamburger", "Grigliate", "Panini", "Pinsa"],
+        "hasMenu": "https://memphisristopub.it/menu.html",
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Via Roma, 17",
+            "addressLocality": "Mercenasco",
+            "postalCode": "10010",
+            "addressRegion": "TO",
+            "addressCountry": "IT"
+        },
+        "openingHoursSpecification": [
+            {
+                "@type": "OpeningHoursSpecification",
+                "dayOfWeek": ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                "opens": "17:00",
+                "closes": "02:30"
+            }
+        ],
+        "sameAs": [
+            "https://www.instagram.com/memphisristopub",
+            "https://www.facebook.com/profile.php?id=61581220463840"
+        ]
+    }
+    </script>
+
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -105,6 +160,13 @@
                 <p class="eyebrow">
                     MEMPHIS① · MERCENASCO
                 </p>
+
+
+                <p
+                    class="open-status"
+                    data-open-status
+                    hidden
+                ></p>
 
 
                 <h1>
@@ -897,6 +959,13 @@
                             Lunedì chiuso
                         </p>
 
+
+                        <p
+                            class="open-status"
+                            data-open-status
+                            hidden
+                        ></p>
+
                     </div>
 
 
@@ -1021,6 +1090,7 @@
     
     <script src="js/events.js"></script>
     <script src="js/menu.js"></script>
+    <script src="js/hours.js"></script>
 </body>
 
 </html>

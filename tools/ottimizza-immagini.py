@@ -8,6 +8,7 @@ leggere da pubblicare, mantenendo la stessa struttura di cartelle.
 - Foto e locandine (senza trasparenza) -> .jpg
 - Immagini con trasparenza (es. logo)  -> .png, bordi trasparenti rimossi
 - Locandine (events/): bande nere degli screenshot rimosse
+- Dal logo vengono generate anche le favicon
 - Rotazione EXIF applicata, metadati rimossi (niente GPS dai telefoni)
 
 Uso, dalla cartella del progetto:
@@ -30,6 +31,9 @@ OUT = ROOT / "images"
 EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 JPEG_QUALITY = 80
+
+# Sfondo delle icone (uguale a --bg del CSS)
+ICON_BACKGROUND = (17, 16, 15)
 
 # Sotto questa luminosità (0-255) un bordo è considerato "nero"
 BLACK_THRESHOLD = 24
@@ -65,6 +69,30 @@ def trim_black_borders(image):
     return image.crop(box) if box else image
 
 
+def make_icons(logo):
+    """Favicon e icona per la schermata home di iPhone/Android."""
+
+    for name, size, padding in (
+        ("favicon-32.png", 32, 0),
+        ("apple-touch-icon.png", 180, 18),
+        ("icon-512.png", 512, 48),
+    ):
+
+        icon = Image.new("RGBA", (size, size), ICON_BACKGROUND + (255,))
+
+        inner = size - padding * 2
+
+        mark = logo.copy()
+        mark.thumbnail((inner, inner), Image.LANCZOS)
+
+        icon.alpha_composite(
+            mark,
+            ((size - mark.width) // 2, (size - mark.height) // 2),
+        )
+
+        icon.convert("RGB").save(OUT / name, optimize=True)
+
+
 def optimize(source):
 
     relative = source.relative_to(SRC)
@@ -76,6 +104,9 @@ def optimize(source):
     if transparent:
         image = image.convert("RGBA")
         image = image.crop(image.getchannel("A").getbbox())
+
+        if relative.stem == "logo":
+            make_icons(image)
     else:
         image = image.convert("RGB")
 
