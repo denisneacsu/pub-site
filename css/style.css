@@ -511,6 +511,8 @@ p {
 
 
 .event-date {
+    display: block;
+
     margin-bottom: 14px;
 
     color: var(--accent-light);
@@ -1421,13 +1423,95 @@ a:focus-visible {
     }
 
 
+    /*
+     * Prossimo evento compatto: titolo e pulsante,
+     * poi locandina intera, poi countdown.
+     * Tutto visibile in una schermata.
+     */
+
     .event-feature {
-        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
+
+        min-height: 0;
+    }
+
+
+    .event-info {
+        display: contents;
+    }
+
+
+    .event-head {
+        order: 1;
+
+        padding: 22px 22px 16px;
+    }
+
+
+    .event-head h3 {
+        margin-bottom: 0;
+
+        font-size: clamp(1.7rem, 7vw, 2.4rem);
+    }
+
+
+    .event-head p {
+        display: none;
+    }
+
+
+    .event-date {
+        margin-bottom: 6px;
+    }
+
+
+    .event-cta {
+        order: 2;
+
+        margin: 0 22px 20px;
     }
 
 
     .event-poster {
-        min-height: 420px;
+        order: 3;
+
+        min-height: 0;
+        height: 48vh;
+        height: 48svh;
+    }
+
+
+    .event-poster img {
+        object-fit: contain;
+    }
+
+
+    .event-countdown {
+        order: 4;
+
+        justify-content: space-around;
+
+        margin: 0;
+        padding: 16px 22px;
+
+        border-top: 1px solid var(--border);
+    }
+
+
+    .next-event .section-heading {
+        margin-bottom: 18px;
+    }
+
+
+    .next-event .section-heading h2,
+    .next-event .section-heading > p {
+        display: none;
+    }
+
+
+    .next-event .section-heading .eyebrow {
+        margin-bottom: 0;
     }
 
 
@@ -1581,18 +1665,8 @@ a:focus-visible {
     }
 
 
-    .event-poster {
-        min-height: 390px;
-    }
-
-
-    .event-info {
-        padding: 28px 22px;
-    }
-
-
-    .event-countdown {
-        gap: 22px;
+    .next-event.section {
+        padding-block: 44px;
     }
 
 

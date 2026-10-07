@@ -147,6 +147,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const formattedDate =
             formatDate(event.dateTime);
 
+        const whatsappText = encodeURIComponent(
+            `Ciao! Vorrei informazioni sulla serata "${event.title}" del ${formattedDate}.`
+        );
+
 
         eventFeature.innerHTML = `
 
@@ -162,21 +166,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
             <div class="event-info">
 
-                <span class="event-date">
-                    ${formattedDate}
-                    ${event.time ? ` · ${event.time}` : ""}
-                </span>
+                <div class="event-head">
+
+                    <span class="event-date">
+                        ${formattedDate}
+                        ${event.time ? ` · ${event.time}` : ""}
+                    </span>
 
 
-                <h3>
-                    ${escapeHtml(event.title)}
-                </h3>
+                    <h3>
+                        ${escapeHtml(event.title)}
+                    </h3>
 
 
-                <p>
-                    Il prossimo appuntamento
-                    del MEMPHIS①.
-                </p>
+                    <p>
+                        Il prossimo appuntamento
+                        del MEMPHIS①.
+                    </p>
+
+                </div>
 
 
                 <div
@@ -232,8 +240,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                 <a
-                    href="https://wa.me/393714952872"
-                    class="btn btn-primary"
+                    href="https://wa.me/393714952872?text=${whatsappText}"
+                    class="btn btn-primary event-cta"
                     target="_blank"
                     rel="noopener"
                 >
