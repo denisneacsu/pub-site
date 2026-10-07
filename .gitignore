@@ -11,3 +11,6 @@ desktop.ini
 
 # Originali delle immagini (pesanti, non pubblicati)
 images-src/
+
+# Cache di Python
+__pycache__/
