@@ -181,7 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 <div
                     class="event-countdown"
-                    aria-live="polite"
+                    role="timer"
                     aria-label="Conto alla rovescia per ${escapeHtml(event.title)}"
                 >
 
@@ -232,7 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                 <a
-                    href="https://wa.me/3714952872"
+                    href="https://wa.me/393714952872"
                     class="btn btn-primary"
                     target="_blank"
                     rel="noopener"
