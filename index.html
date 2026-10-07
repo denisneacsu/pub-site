@@ -630,78 +630,24 @@
                 </div>
 
 
-                <div class="menu-preview-grid">
+                <div
+                    class="menu-preview-grid"
+                    data-menu="featured"
+                >
 
-                    <!-- ANTIPASTO / FRITTI -->
-                    <div class="menu-preview-column">
-
-                        <span class="menu-column-title">
-                            FRITTI
-                        </span>
-
-                        <div class="menu-preview-item">
-                            <div>
-                                <strong>Patatine fritte</strong>
-                            </div>
-
-                            <span>€ 4,00</span>
-                        </div>
-
-                        <div class="menu-preview-item">
-                            <div>
-                                <strong>Chicken Nuggets</strong>
-                            </div>
-
-                            <span>€ 5,00</span>
-                        </div>
-
-                        <div class="menu-preview-item">
-                            <div>
-                                <strong>Anelli di cipolla</strong>
-                            </div>
-
-                            <span>€ 5,00</span>
-                        </div>
-
-                    </div>
-
-
-                    <!-- PANINI -->
-                    <div class="menu-preview-column">
-
-                        <span class="menu-column-title">
-                            PANINI
-                        </span>
-
-                        <div class="menu-preview-item">
-                            <div>
-                                <strong>Pulled Pork</strong>
-
-                                <small>
-                                    Pulled pork, coleslaw e salsa barbecue.
-                                </small>
-                            </div>
-                        </div>
-
-                        <div class="menu-preview-item">
-                            <div>
-                                <strong>Panino MEMPHIS</strong>
-
-                                <small>
-                                    Una delle proposte della casa.
-                                </small>
-                            </div>
-                        </div>
-
-                        <div class="menu-preview-item">
-                            <div>
-                                <strong>Panini e proposte della cucina</strong>
-                            </div>
-                        </div>
-
-                    </div>
+                    <!--
+                        Le voci in evidenza vengono caricate
+                        automaticamente da menu.json
+                        (voci con "featured": true).
+                    -->
 
                 </div>
+
+
+                <p
+                    class="menu-preview-note"
+                    data-menu-note
+                ></p>
 
 
                 <div class="menu-preview-action">
@@ -1073,6 +1019,7 @@
     </footer>
     
     <script src="js/events.js"></script>
+    <script src="js/menu.js"></script>
 </body>
 
 </html>

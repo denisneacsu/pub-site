@@ -1,0 +1,227 @@
+{
+    "note": "Il menu è in aggiornamento: piatti e prezzi possono variare. Per informazioni sugli allergeni chiedi al personale.",
+
+    "sections": [
+        {
+            "title": "Cucina",
+            "categories": [
+                {
+                    "id": "fritti",
+                    "title": "Fritti",
+                    "items": [
+                        { "name": "Patatine fritte", "price": 5.5 },
+                        { "name": "Patatine con buccia", "price": 5.5 },
+                        { "name": "Anelli di cipolla", "price": 5.5 },
+                        { "name": "Crocchette di patate", "price": 5.5 },
+                        { "name": "Nuggets", "price": 5.5 },
+                        { "name": "Patatine cheddar e bacon", "price": 6.5, "featured": true }
+                    ]
+                },
+                {
+                    "id": "piatti",
+                    "title": "Piatti",
+                    "items": [
+                        {
+                            "name": "Piatto Hamburger",
+                            "description": "Hamburger di Fassona 200 g con cheddar, bacon e granella di cipolla fritta. Servito con patatine.",
+                            "price": 16,
+                            "featured": true
+                        },
+                        {
+                            "name": "Piatto Hamburger senza pane",
+                            "description": "Hamburger di Fassona 200 g con cheddar, bacon e granella di cipolla fritta. Servito con patatine.",
+                            "price": 14
+                        },
+                        {
+                            "name": "Solo Hamburger",
+                            "description": "Hamburger di Fassona 200 g.",
+                            "price": 10
+                        },
+                        { "name": "Tagliata", "price": 20 },
+                        { "name": "Picanha", "price": 22, "featured": true },
+                        { "name": "Pinsa Margherita", "price": 7 },
+                        { "name": "Pinsa con condimenti", "price": 10 },
+                        { "name": "Porchetta alla piastra", "price": 12 },
+                        {
+                            "name": "Salsiccia alla griglia",
+                            "description": "Servita con insalata o patatine.",
+                            "price": 14
+                        },
+                        { "name": "Milanese con patatine", "price": 15 }
+                    ]
+                },
+                {
+                    "id": "panini",
+                    "title": "Panini",
+                    "items": [
+                        {
+                            "name": "Grifondoro",
+                            "description": "Cotoletta, maionese, insalata e pomodoro.",
+                            "price": 7,
+                            "featured": true
+                        },
+                        {
+                            "name": "Sirius Black",
+                            "description": "Speck, brie e crema di tartufo.",
+                            "price": 7
+                        },
+                        {
+                            "name": "Piton",
+                            "description": "Salsiccia e crauti.",
+                            "price": 6.5
+                        },
+                        {
+                            "name": "Hagrid",
+                            "description": "Porchetta, insalata, maionese e pomodoro.",
+                            "price": 6.5
+                        },
+                        {
+                            "name": "Silente",
+                            "description": "Cotto o crudo, rucola e stracchino.",
+                            "price": 5.5
+                        },
+                        {
+                            "name": "Dobby",
+                            "description": "Cotto e formaggio.",
+                            "price": 5
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "title": "Bevande",
+            "categories": [
+                {
+                    "id": "birre",
+                    "title": "Birre alla spina",
+                    "columns": ["Piccola", "Media"],
+                    "items": [
+                        { "name": "Hoegaarden", "prices": [4, 7], "featured": true },
+                        { "name": "Leffe Rouge", "prices": [4, 7], "featured": true },
+                        { "name": "Leffe Ambrée", "prices": [4, 7] },
+                        { "name": "Goose IPA", "prices": [null, 5] },
+                        { "name": "Stella Artois", "prices": [3.5, 6] },
+                        {
+                            "name": "Panaché",
+                            "description": "Stella Artois con gazzosa o Sprite.",
+                            "prices": [3.5, 6]
+                        },
+                        { "name": "Tennent's", "prices": [4, null] },
+                        { "name": "Corona", "prices": [4, null] },
+                        { "name": "Ceres", "prices": [4, null] }
+                    ]
+                },
+                {
+                    "id": "cocktail",
+                    "title": "Cocktail",
+                    "items": [
+                        { "name": "Spritz", "price": 6, "featured": true },
+                        { "name": "Spritz Campari", "price": 6 },
+                        { "name": "Spritz Sarti Rosa", "price": 6 },
+                        { "name": "Spritz Cynar", "price": 6 },
+                        { "name": "Negroni", "price": 7 },
+                        { "name": "Negroni Sbagliato", "price": 7 },
+                        { "name": "Americano", "price": 7 },
+                        { "name": "Coca Malibu", "price": 7 },
+                        { "name": "Caipiroska", "price": 7 },
+                        { "name": "Mojito", "price": 8 },
+                        { "name": "Margarita", "price": 10 },
+                        { "name": "Moscow Mule", "price": 10, "featured": true },
+                        { "name": "Long Island Iced Tea", "price": 10 },
+                        { "name": "Vodka Sour", "price": 10 }
+                    ]
+                },
+                {
+                    "id": "gin",
+                    "title": "Gin tonic / Gin lemon",
+                    "items": [
+                        { "name": "Gin Bulldog", "price": 7 },
+                        { "name": "Gin Dolce Vita", "price": 7 },
+                        { "name": "Gin Tanqueray", "price": 10 },
+                        { "name": "Gin Tanqueray analcolico", "price": 10 },
+                        { "name": "Gin N° Teen", "price": 10 },
+                        { "name": "Gin Mare", "price": 12 },
+                        { "name": "Gin Gunpowder", "price": 12 },
+                        { "name": "Gin Hendrick's", "price": 12 },
+                        { "name": "Gin Cubical", "price": 12 },
+                        { "name": "Gin Amuerte", "price": 15 },
+                        { "name": "Gin Elephant", "price": 15 },
+                        { "name": "Gin Monkey", "price": 15 }
+                    ]
+                },
+                {
+                    "id": "vini",
+                    "title": "Vini",
+                    "columns": ["Calice", "Bottiglia"],
+                    "items": [
+                        { "group": "Rossi", "name": "Nebbiolo d'Alba", "description": "Cantine Massucco, 2022", "prices": [4, 17] },
+                        { "group": "Rossi", "name": "Chianti", "description": "Banfi, 2024", "prices": [5, 20] },
+                        { "group": "Bianchi", "name": "Gewürztraminer", "description": "Rottensteiner, 2024", "prices": [4, 17] },
+                        { "group": "Bianchi", "name": "Arneis", "description": "Cantine Massucco, 2024", "prices": [4, 18] },
+                        { "group": "Bianchi", "name": "Falanghina", "description": "Cantina di Solopaca, 2024", "prices": [4, 17] },
+                        { "group": "Rosati", "name": "Rosé Liè", "description": "Cantine Massucco, 2024", "prices": [4, 17] },
+                        { "group": "Spumanti", "name": "Mionetto Cuvée", "description": "Extra Dry", "prices": [4, 20] },
+                        { "group": "Spumanti", "name": "Mionetto Valdobbiadene", "description": "Extra Dry", "prices": [5, 25] }
+                    ]
+                },
+                {
+                    "id": "bibite",
+                    "title": "Bibite",
+                    "items": [
+                        { "name": "Coca-Cola", "description": "Bottiglia", "price": 3.5 },
+                        { "name": "Coca-Cola Zero", "description": "Bottiglia", "price": 3.5 },
+                        { "name": "Gazzosa", "description": "Lurisia", "price": 3.5 },
+                        { "name": "Aranciata", "description": "Lurisia", "price": 3.5 },
+                        { "name": "Acqua tonica", "description": "Lurisia", "price": 3.5 },
+                        { "name": "Schweppes", "price": 3.5 },
+                        { "name": "Red Bull", "price": 3.5 },
+                        { "name": "Tè limone / pesca", "description": "Fuze Tea", "price": 2.5 },
+                        { "name": "Fanta", "price": 2.5 },
+                        { "name": "Sprite", "price": 2.5 },
+                        { "name": "Acqua", "description": "0,5 l", "price": 1.2 }
+                    ]
+                },
+                {
+                    "id": "distillati",
+                    "title": "Rum, grappe e distillati",
+                    "items": [
+                        { "name": "Gran Añejo", "price": 4 },
+                        { "name": "Baron Samedi", "price": 4 },
+                        { "name": "Pampero", "price": 4 },
+                        { "name": "Jack Daniel's", "price": 4 },
+                        { "name": "Grappa bianca", "price": 4 },
+                        { "name": "Grappa gialla", "price": 4 },
+                        { "name": "Imperial", "price": 5 },
+                        { "name": "Kraken", "price": 5 },
+                        { "name": "Nikka Super", "price": 10 }
+                    ]
+                },
+                {
+                    "id": "amari",
+                    "title": "Amari e liquori",
+                    "items": [
+                        { "name": "Jefferson", "price": 5 },
+                        { "name": "Amaro Averna", "price": 4 },
+                        { "name": "Amaro Lucano", "price": 4 },
+                        { "name": "Montenegro", "price": 4 },
+                        { "name": "San Simone", "price": 4 },
+                        { "name": "Cynar", "price": 4 },
+                        { "name": "Fernet-Branca", "price": 4 },
+                        { "name": "Branca Menta", "price": 4 },
+                        { "name": "Jägermeister", "price": 4 },
+                        { "name": "Unicum", "price": 4 },
+                        { "name": "Genepì", "price": 4 },
+                        { "name": "Mirto", "price": 4 },
+                        { "name": "Limoncello", "price": 4 },
+                        { "name": "Sambuca", "price": 4 },
+                        { "name": "Amaretto", "price": 4 },
+                        { "name": "Baileys", "price": 4 },
+                        { "name": "Grand Marnier", "price": 4 },
+                        { "name": "Vecchia Romagna", "price": 4 }
+                    ]
+                }
+            ]
+        }
+    ]
+}
