@@ -1047,7 +1047,7 @@ p {
 .beer-item {
     display: flex;
 
-    align-items: flex-start;
+    align-items: baseline;
     justify-content: space-between;
 
     gap: 20px;
@@ -1131,6 +1131,11 @@ p {
 
 
 /* Pagina menu completo */
+
+.menu-page.section {
+    padding-top: calc(var(--section-space) + 40px);
+}
+
 
 .menu-page-header {
     max-width: 640px;
@@ -2061,21 +2066,6 @@ a:focus-visible {
         grid-column: auto;
     }
     
-    .menu-preview-grid {
-        grid-template-columns: 1fr;
-
-        gap: 30px;
-    }
-
-
-    .menu-preview-item {
-        padding-block: 12px;
-    }
-
-
-    .menu-preview-action {
-        margin-top: 30px;
-    }
 
 
     
@@ -2171,6 +2161,38 @@ a:focus-visible {
     margin-top: 36px;
 
     text-align: center;
+}
+
+
+
+/*
+ * Mobile: dopo le regole base dell'anteprima,
+ * altrimenti verrebbero sovrascritte.
+ */
+
+@media (max-width: 600px) {
+
+    .menu-preview-grid {
+        grid-template-columns: 1fr;
+
+        gap: 30px;
+    }
+
+
+    .menu-preview-item {
+        padding-block: 12px;
+    }
+
+
+    .menu-preview-action {
+        margin-top: 30px;
+    }
+
+
+    .menu-page.section {
+        padding-top: 110px;
+    }
+
 }
 
 
