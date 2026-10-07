@@ -513,6 +513,13 @@ p {
 }
 
 
+/* Pulsante navigazione mobile (js/nav.js) */
+
+.nav-toggle {
+    display: none;
+}
+
+
 /* =========================================================
    9. NEXT EVENT
 ========================================================= */
@@ -1683,8 +1690,109 @@ a:focus-visible {
 
 @media (max-width: 900px) {
 
+    /*
+     * Navigazione mobile: i link diventano un pannello
+     * sotto l'header, aperto dal pulsante a tre linee.
+     */
+
+    .nav-toggle {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        gap: 5px;
+
+        width: 44px;
+        height: 40px;
+
+        padding: 0;
+
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 7px;
+
+        background: transparent;
+
+        cursor: pointer;
+    }
+
+
+    .nav-toggle span {
+        display: block;
+
+        width: 18px;
+        height: 2px;
+
+        border-radius: 2px;
+
+        background: var(--text);
+
+        transition:
+            transform var(--transition),
+            opacity var(--transition);
+    }
+
+
+    .site-header.nav-open .nav-toggle span:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+    }
+
+
+    .site-header.nav-open .nav-toggle span:nth-child(2) {
+        opacity: 0;
+    }
+
+
+    .site-header.nav-open .nav-toggle span:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+    }
+
+
     .desktop-nav {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+
         display: none;
+
+        flex-direction: column;
+        align-items: stretch;
+
+        gap: 0;
+
+        margin: 0;
+        padding: 8px 20px 18px;
+
+        border-bottom: 1px solid var(--border);
+
+        background: rgba(10, 9, 8, 0.97);
+    }
+
+
+    .site-header.nav-open .desktop-nav {
+        display: flex;
+    }
+
+
+    .desktop-nav a {
+        padding: 14px 0;
+
+        border-bottom: 1px solid var(--border);
+
+        color: var(--text);
+
+        font-size: 1.05rem;
+    }
+
+
+    .desktop-nav a:last-child {
+        border-bottom: 0;
+    }
+
+
+    .header-inner {
+        gap: 10px;
     }
 
 
