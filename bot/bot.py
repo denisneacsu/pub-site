@@ -172,7 +172,7 @@ async def in_repo(func, *args):
 
 
 
-async def propose(update, context, change, summary, back=None):
+async def propose(update, context, change, summary, back=None, extra=None):
     """Anteprima + riepilogo, in attesa di conferma."""
 
     message = update.effective_message
@@ -203,7 +203,10 @@ async def propose(update, context, change, summary, back=None):
     await message.reply_photo(
         photo=image,
         caption=f"{summary}\n\nPubblico sul sito?",
-        reply_markup=keyboard([("✅ Pubblica", f"publish:{pid}"), ("❌ Annulla", f"discard:{pid}")]),
+        reply_markup=keyboard(
+            [("✅ Pubblica", f"publish:{pid}"), ("❌ Annulla", f"discard:{pid}")],
+            [(label, f"{action}:{pid}") for label, action in (extra or [])],
+        ),
         parse_mode="HTML",
     )
 
@@ -215,6 +218,9 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, action,
     await query.edit_message_reply_markup(reply_markup=None)
 
     change = context.user_data.get("pending", {}).pop(pid, None)
+
+    if action == "publishfeat" and change:
+        change["featured"] = True
 
     if action == "discard" or change is None:
         text = "Annullato, non ho pubblicato nulla." if change else "Questa anteprima è scaduta."
@@ -567,17 +573,19 @@ async def finish_draft(update, context):
             + (f" · {draft['time']}" if draft["time"] else "")
         )
 
-        earlier = [
-            e for e in read_json("events.json")
-            if e.get("type") != "promo"
-            and today().isoformat() <= e.get("date", "") < draft["date"]
-        ]
+        new = {"date": draft["date"], "time": draft["time"], "title": draft["title"]}
+        shown = core.shown_featured(read_json("events.json") + [new])
 
-        if earlier:
+        extra = None
+
+        if shown is new:
+            summary += "\n\n⭐ Sarà l'evento <b>in evidenza</b>, con il countdown."
+        else:
             summary += (
-                f"\n\nℹ️ Sul sito si vede un evento alla volta: prima c'è "
-                f"«{esc(earlier[0]['title'])}», questo comparirà dopo."
+                f"\n\n📋 Comparirà in «In programma». "
+                f"In evidenza resta «{esc(shown['title'])}»."
             )
+            extra = [("⭐ Pubblica in evidenza", "publishfeat")]
 
         back = ("⬅️ Eventi", "list:events")
 
@@ -590,7 +598,7 @@ async def finish_draft(update, context):
 
         back = ("⬅️ Promozioni", "list:promos")
 
-    await propose(update, context, draft, summary, back)
+    await propose(update, context, draft, summary, back, extra if draft["kind"] == "event" else None)
 
 
 # =========================================================
@@ -621,18 +629,21 @@ async def entries_screen(update, context, promos):
 
     else:
 
-        now = today().isoformat()
-
-        upcoming = sorted((e for e in entries if e["date"] >= now), key=lambda e: e["date"])
-        past = sorted((e for e in entries if e["date"] < now), key=lambda e: e["date"], reverse=True)
+        upcoming = core.upcoming_events(entries)
+        shown = core.shown_featured(entries)
+        past = sorted(
+            (e for e in entries if e not in upcoming),
+            key=lambda e: e["date"], reverse=True,
+        )
 
         for e in upcoming:
-            buttons.append([(f"📅 {e['title']} · {format_date(e['date'])[:5]}", f"en:{Path(e['image']).name}")])
+            icon = "⭐" if e is shown else "📅"
+            buttons.append([(f"{icon} {e['title']} · {format_date(e['date'])[:5]}", f"en:{Path(e['image']).name}")])
 
         for e in past[:5]:
             buttons.append([(f"🕘 {e['title']} · {format_date(e['date'])[:5]}", f"en:{Path(e['image']).name}")])
 
-        title = "📅 <b>Eventi</b> (🕘 = già passati)"
+        title = "📅 <b>Eventi</b>\n⭐ = in evidenza con il countdown · 🕘 = già passati"
         add = ("➕ Nuovo evento", "newposter")
 
     if not buttons:
@@ -668,7 +679,27 @@ async def entry_screen(update, context, name):
         ]
     else:
         lines.append(f"📅 {format_date(entry['date'])}" + (f" · 🕑 {entry['time']}" if entry.get("time") else ""))
+
+        events = read_json("events.json")
+        upcoming = [e["image"] for e in core.upcoming_events(events)]
+        shown = core.shown_featured(events)
+
+        star = None
+
+        if entry["image"] not in upcoming:
+            lines.append("🕘 Già passato: è tra le serate passate")
+        elif entry.get("featured"):
+            lines.append("⭐ In evidenza con il countdown (scelto da te)")
+            star = ("☆ Togli evidenza", f"ea:unfeat:{name}")
+        elif shown and shown["image"] == entry["image"]:
+            lines.append("⭐ In evidenza con il countdown (è il più vicino)")
+            star = ("⭐ Tieni in evidenza", f"ea:feat:{name}")
+        else:
+            lines.append("📋 In «In programma», sotto l'evento in evidenza")
+            star = ("⭐ Metti in evidenza", f"ea:feat:{name}")
+
         rows = [
+            [star] if star else None,
             [("✏️ Titolo", f"ea:title:{name}"), ("📅 Data", f"ea:date:{name}")],
             [("🕑 Ora", f"ea:time:{name}"), ("🗑 Togli dal sito", f"ea:remove:{name}")],
             [("🖼 Vedi locandina", f"{SITE_URL}/{entry['image']}")],
@@ -697,6 +728,29 @@ async def entry_action(update, context, action, name):
             {"kind": "remove", "image": entry["image"]},
             f"🗑 Tolgo «{esc(entry['title'])}» dal sito.",
             back,
+        )
+
+    if action in ("feat", "unfeat"):
+
+        events = read_json("events.json")
+        current = core.shown_featured(events)
+
+        if action == "feat":
+            summary = f"⭐ <b>{esc(entry['title'])}</b> va in evidenza con il countdown."
+            if current and current["image"] != entry["image"]:
+                summary += f"\n«{esc(current['title'])}» passa in «In programma»."
+        else:
+            for e in events:
+                e.pop("featured", None)
+            after = core.shown_featured(events)
+            summary = f"☆ Tolgo l'evidenza a <b>{esc(entry['title'])}</b>."
+            if after:
+                summary += f"\nIn evidenza andrà il più vicino: «{esc(after['title'])}»."
+
+        return await propose(
+            update, context,
+            {"kind": "feature", "image": entry["image"], "on": action == "feat"},
+            summary, back,
         )
 
     ctx = {"mode": "entry", "image": entry["image"]}
@@ -1336,7 +1390,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     head, _, rest = data.partition(":")
 
-    if head in ("publish", "discard"):
+    if head in ("publish", "publishfeat", "discard"):
         return await on_confirm(update, context, head, rest)
 
     if data == "cancel":

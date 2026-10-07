@@ -162,6 +162,39 @@ def find_item(menu, category_id, name):
     raise RuntimeError(f"Voce non trovata: {name}")
 
 
+def event_start(entry):
+    """Inizio di un evento (senza orario: fine giornata, come sul sito)."""
+
+    time = entry.get("time") or "23:59"
+
+    return datetime.fromisoformat(f"{entry['date']}T{time}").replace(tzinfo=TZ)
+
+
+def upcoming_events(events):
+    """Eventi futuri, dal più vicino."""
+
+    now = datetime.now(TZ)
+
+    return sorted(
+        (e for e in events if e.get("type") != "promo" and event_start(e) > now),
+        key=event_start,
+    )
+
+
+def shown_featured(events):
+    """
+    Evento che il sito mostra in evidenza (riquadro grande con countdown):
+    quello con la stella, altrimenti il più vicino. Stessa regola di events.js.
+    """
+
+    upcoming = upcoming_events(events)
+
+    return next(
+        (e for e in upcoming if e.get("featured")),
+        upcoming[0] if upcoming else None,
+    )
+
+
 def get_entry(image):
     """Evento o promozione di events.json, cercato per immagine."""
 
@@ -367,12 +400,21 @@ def apply_change(change):
         events = read_json("events.json")
 
         if kind == "event":
-            events.append({
+
+            entry = {
                 "date": change["date"],
                 "time": change["time"],
                 "title": change["title"],
                 "image": image,
-            })
+            }
+
+            # "Pubblica in evidenza": la stella è una sola
+            if change.get("featured"):
+                for other in events:
+                    other.pop("featured", None)
+                entry["featured"] = True
+
+            events.append(entry)
             message = f"Evento: {change['title']} ({format_date(change['date'])})"
         else:
             # Le promozioni nuove vanno per prime
@@ -400,6 +442,26 @@ def apply_change(change):
         write_json("events.json", events)
 
         return f"Modificato: {entry['title']}", ["events.json"]
+
+    # --- Evidenza (stella): un solo evento alla volta ---
+
+    if kind == "feature":
+
+        events = read_json("events.json")
+
+        for entry in events:
+            entry.pop("featured", None)
+
+        target = next(e for e in events if e["image"] == change["image"])
+
+        if change["on"]:
+            target["featured"] = True
+
+        write_json("events.json", events)
+
+        verb = "In evidenza" if change["on"] else "Tolta evidenza"
+
+        return f"{verb}: {target['title']}", ["events.json"]
 
     # --- Rimozione di un evento o promozione ---
 
@@ -509,7 +571,7 @@ def preview_target(change):
 
     kind = change["kind"]
 
-    if kind == "event":
+    if kind in ("event", "feature"):
         return "index.html", "#eventi"
 
     if kind == "promo":

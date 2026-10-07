@@ -754,6 +754,39 @@ p {
 }
 
 
+/* In programma: altri eventi futuri (sotto il prossimo evento) */
+
+.upcoming {
+    margin-top: 48px;
+}
+
+
+.upcoming[hidden] {
+    display: none;
+}
+
+
+.upcoming-title {
+    margin-bottom: 18px;
+
+    font-size: 1.4rem;
+}
+
+
+.upcoming-date {
+    display: block;
+
+    margin-bottom: 2px;
+
+    color: var(--accent-light);
+
+    font-size: 0.75rem;
+    font-weight: 700;
+
+    letter-spacing: 0.06em;
+}
+
+
 /* =========================================================
    10. LOCALE
 ========================================================= */

@@ -5,11 +5,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const pastEventsSection = document.querySelector(".past-events");
     const pastEventsGrid = document.querySelector(".past-events-grid");
     const promosSection = document.querySelector(".promos");
-    const promosGrid = document.querySelector(".promos-grid");
+    const promosGrid = document.querySelector(".promos .promos-grid");
+    const upcomingBlock = document.querySelector(".upcoming");
+    const upcomingGrid = document.querySelector(".upcoming-grid");
 
     let events = [];
     let countdownInterval = null;
     let currentNextEvent = null;
+
+    /*
+     * Momento in cui il primo evento futuro inizia:
+     * a quel punto la pagina si ricompone (l'evento
+     * passa nello storico, l'evidenza può cambiare).
+     */
+    let nextChange = null;
 
 
     /*
@@ -213,7 +222,23 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-        currentNextEvent = upcomingEvents[0] || null;
+        /*
+         * In evidenza (riquadro grande con countdown) va l'evento
+         * con "featured": true; se non c'è, il più vicino.
+         * Gli altri eventi futuri vanno in "In programma".
+         */
+        currentNextEvent =
+            upcomingEvents.find(event => event.featured) ||
+            upcomingEvents[0] ||
+            null;
+
+        nextChange = upcomingEvents[0] ? upcomingEvents[0].dateTime : null;
+
+        renderUpcoming(
+            upcomingEvents.filter(event => event !== currentNextEvent)
+        );
+
+        const isNearest = currentNextEvent === upcomingEvents[0];
 
 
         /*
@@ -226,7 +251,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             nextEventSection.style.display = "";
 
-            renderNextEvent(currentNextEvent);
+            renderNextEvent(currentNextEvent, isNearest);
 
         } else {
 
@@ -250,7 +275,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ========================================
     */
 
-    function renderNextEvent(event) {
+    function renderNextEvent(event, isNearest) {
 
         const formattedDate =
             formatDate(event.dateTime);
@@ -288,8 +313,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                     <p>
-                        Il prossimo appuntamento
-                        del MEMPHIS①.
+                        ${isNearest
+                            ? "Il prossimo appuntamento del MEMPHIS①."
+                            : "Da non perdere al MEMPHIS①."}
                     </p>
 
                 </div>
@@ -364,6 +390,81 @@ document.addEventListener("DOMContentLoaded", () => {
          * Imposta subito il countdown
          */
         updateCountdown();
+    }
+
+
+    /*
+    ========================================
+    IN PROGRAMMA (altri eventi futuri)
+    ========================================
+    */
+
+    function renderUpcoming(list) {
+
+        if (!upcomingBlock || !upcomingGrid) {
+            return;
+        }
+
+
+        upcomingBlock.hidden = list.length === 0;
+
+        upcomingGrid.innerHTML = list
+            .map(event => {
+
+                const title = escapeHtml(event.title);
+                const formattedDate = formatDate(event.dateTime);
+
+                const whatsappText = encodeURIComponent(
+                    `Ciao! Vorrei informazioni sulla serata "${event.title}" del ${formattedDate}.`
+                );
+
+                return `
+                    <article class="promo-card">
+
+                        <a
+                            href="${escapeHtml(event.image)}"
+                            class="promo-image"
+                            target="_blank"
+                            rel="noopener"
+                            aria-label="Apri la locandina ${title}"
+                        >
+                            <img
+                                src="${escapeHtml(event.image)}"
+                                alt="Locandina ${title}"
+                                loading="lazy"
+                            >
+                        </a>
+
+
+                        <div class="promo-content">
+
+                            <div>
+                                <span class="upcoming-date">
+                                    ${formattedDate}${event.time ? ` · ${event.time}` : ""}
+                                </span>
+
+                                <h3>
+                                    ${title}
+                                </h3>
+                            </div>
+
+
+                            <a
+                                href="https://wa.me/393714952872?text=${whatsappText}"
+                                class="text-link"
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                Info
+                            </a>
+
+                        </div>
+
+                    </article>
+                `;
+
+            })
+            .join("");
     }
 
 
@@ -445,12 +546,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         /*
-         * Se l'evento è appena passato,
-         * ricostruiamo la pagina una sola volta
-         * per spostarlo nello storico.
+         * Se un evento è appena iniziato (quello in evidenza
+         * o uno di "In programma"), ricostruiamo la pagina
+         * una sola volta per spostarlo nello storico.
          */
 
-        if (currentNextEvent.dateTime <= now) {
+        if (nextChange && nextChange <= now) {
 
             clearInterval(countdownInterval);
 
