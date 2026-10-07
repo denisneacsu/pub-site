@@ -3,18 +3,18 @@
         "date": "2026-10-31",
         "time": "19:30",
         "title": "Halloween",
-        "image": "images/events/20261031_Halloween.png"
+        "image": "images/events/20261031_Halloween.jpg"
     },
     {
         "date": "2026-01-02",
         "time": "",
         "title": "Ribs",
-        "image": "images/events/20260102_Ribs.PNG"
+        "image": "images/events/20260102_Ribs.jpg"
     },
     {
         "date": "2026-01-02",
         "time": "",
         "title": "Dehor",
-        "image": "images/events/20260102_Dehor.PNG"
+        "image": "images/events/20260102_Dehor.jpg"
     }
 ]

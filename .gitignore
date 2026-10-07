@@ -5,3 +5,9 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# Ambiente Python per gli script
+.venv/
+
+# Originali delle immagini (pesanti, non pubblicati)
+images-src/
