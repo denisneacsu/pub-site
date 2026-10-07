@@ -3,6 +3,8 @@ document.addEventListener("DOMContentLoaded", () => {
     /*
      * Avviso in fondo allo schermo (es. "Chiuso per ferie...").
      * Il testo sta in notice.json: vuoto = nessun avviso.
+     * "expires" (facoltativo, data e ora ISO): dopo quel momento
+     * l'avviso sparisce da solo (es. "Stasera chiudiamo alle 00:30").
      * Chi lo chiude non lo rivede finché il testo non cambia.
      */
 
@@ -14,7 +16,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const text = notice && String(notice.text || "").trim();
 
-            if (!text || readClosed() === text) {
+            const expired = notice && notice.expires && new Date(notice.expires) < new Date();
+
+            if (!text || expired || readClosed() === text) {
                 return;
             }
 

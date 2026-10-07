@@ -195,6 +195,58 @@ def shown_featured(events):
     )
 
 
+# Orari normali (uguali a js/hours.js): lunedì chiuso
+NORMAL_OPENS = "17:00"
+NORMAL_CLOSES = "02:30"
+
+
+def service_date():
+    """Data della serata in corso: fino alle 6 del mattino conta quella di ieri."""
+    return (datetime.now(TZ) - timedelta(hours=6)).date()
+
+
+def normally_open(day):
+    return day.weekday() != 0
+
+
+def read_hours():
+    try:
+        return read_json("hours.json")
+    except (OSError, ValueError):
+        return {"exceptions": []}
+
+
+def get_exception(day):
+    return next(
+        (e for e in read_hours().get("exceptions", []) if e["date"] == day.isoformat()),
+        None,
+    )
+
+
+def to_minutes(time):
+    hours, minutes = map(int, time.split(":"))
+    return hours * 60 + minutes
+
+
+def valid_early_close(time):
+    """Chiusura anticipata: dopo l'apertura e prima della chiusura normale."""
+
+    opens = to_minutes(NORMAL_OPENS)
+    normal = to_minutes(NORMAL_CLOSES) + 24 * 60
+
+    end = to_minutes(time)
+    if end <= opens:
+        end += 24 * 60
+
+    return opens < end < normal
+
+
+def tonight_notice(change):
+    if change.get("closed"):
+        return "Stasera il locale è chiuso. Ci scusiamo per il disagio!"
+    return f"Stasera chiudiamo alle {change['closes']}."
+
+
 def get_entry(image):
     """Evento o promozione di events.json, cercato per immagine."""
 
@@ -524,6 +576,39 @@ def apply_change(change):
 
         return f"Menu: eliminato {change['name']}", ["menu.json"]
 
+    # --- Orario di una sola serata ---
+
+    if kind == "tonight":
+
+        day = date.fromisoformat(change["date"])
+        yesterday = (today() - timedelta(days=1)).isoformat()
+
+        # Le eccezioni passate non servono più
+        exceptions = [
+            e for e in read_hours().get("exceptions", [])
+            if e["date"] >= yesterday and e["date"] != change["date"]
+        ]
+
+        if change.get("closes"):
+            exceptions.append({"date": change["date"], "closes": change["closes"]})
+            message = f"Orario {day:%d/%m}: chiusura alle {change['closes']}"
+        elif change.get("closed"):
+            exceptions.append({"date": change["date"], "closed": True})
+            message = f"Orario {day:%d/%m}: serata chiusa"
+        else:
+            message = f"Orario {day:%d/%m}: orario normale"
+
+        write_json("hours.json", {"exceptions": exceptions})
+
+        if change.get("notice"):
+            # L'avviso sparisce da solo la mattina dopo
+            expires = datetime.combine(day + timedelta(days=1), datetime.min.time(), TZ) + timedelta(hours=6)
+            write_json("notice.json", {"text": tonight_notice(change), "expires": expires.isoformat()})
+        elif change.get("reset") and read_json("notice.json").get("expires"):
+            write_json("notice.json", {"text": ""})
+
+        return message, ["hours.json", "notice.json"]
+
     # --- Avviso ---
 
     if kind == "notice":
@@ -574,6 +659,9 @@ def preview_target(change):
     if kind in ("event", "feature"):
         return "index.html", "#eventi"
 
+    if kind == "tonight":
+        return "index.html", None
+
     if kind == "promo":
         return "index.html", "#promozioni"
 
@@ -609,6 +697,11 @@ def screenshot(change):
             viewport={"width": 390, "height": 844},
             device_scale_factor=2,
         )
+
+        # Orario di stasera: anteprima come la vedrà chi apre il sito in serata
+        if change["kind"] == "tonight":
+            evening = datetime.fromisoformat(f"{change['date']}T18:00").replace(tzinfo=TZ)
+            tab.clock.set_fixed_time(evening)
 
         tab.goto(f"{PREVIEW_URL}/{page}")
         tab.wait_for_timeout(1200)

@@ -4,11 +4,16 @@ document.addEventListener("DOMContentLoaded", () => {
      * Badge "Aperto ora / Chiuso" calcolato sull'ora italiana.
      *
      * Orari: dal martedì alla domenica 17:00 – 02:30, lunedì chiuso.
-     * La chiusura alle 02:30 appartiene al giorno precedente:
+     * La chiusura dopo mezzanotte appartiene alla serata precedente:
      * martedì all'01:00 il locale è chiuso (lunedì non apre),
      * lunedì all'01:00 è aperto (coda della domenica).
      *
-     * Se cambiano gli orari, modificare solo queste costanti
+     * Eccezioni per una sola serata in hours.json (le scrive il bot):
+     *   { "date": "2026-10-08", "closes": "00:30" }  chiude prima
+     *   { "date": "2026-10-08", "closed": true }     serata chiusa
+     * "date" è il giorno in cui la serata inizia.
+     *
+     * Se cambiano gli orari normali, modificare solo queste costanti
      * (e il JSON-LD in index.html).
      */
 
@@ -27,6 +32,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
+    let exceptions = {};
+
 
     function toMinutes(time) {
 
@@ -37,77 +44,113 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /*
-     * Giorno della settimana e minuti trascorsi
-     * dalla mezzanotte, nel fuso orario di Roma.
+     * Data (anno, mese, giorno), giorno della settimana e minuti
+     * trascorsi dalla mezzanotte, nel fuso orario di Roma.
      */
     function nowInRome() {
 
         const parts = new Intl.DateTimeFormat("en-US", {
             timeZone: "Europe/Rome",
-            weekday: "short",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
             hour: "2-digit",
             minute: "2-digit",
             hourCycle: "h23"
         }).formatToParts(new Date());
 
-        const value = type => parts.find(part => part.type === type).value;
-
-        const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const value = type => Number(parts.find(part => part.type === type).value);
 
         return {
-            day: weekdays.indexOf(value("weekday")),
-            minutes: Number(value("hour")) * 60 + Number(value("minute"))
+            date: new Date(Date.UTC(value("year"), value("month") - 1, value("day"))),
+            minutes: value("hour") * 60 + value("minute")
         };
+    }
+
+
+    function addDays(date, days) {
+        return new Date(date.getTime() + days * 86400000);
+    }
+
+
+    function isoDate(date) {
+        return date.toISOString().slice(0, 10);
+    }
+
+
+    /*
+     * Serata che inizia nel giorno indicato: null se chiusa,
+     * altrimenti apertura, chiusura e fine in minuti dalla
+     * mezzanotte di quel giorno (oltre 1440 = notte dopo).
+     */
+    function evening(date) {
+
+        const exception = exceptions[isoDate(date)] || {};
+
+        if (!OPEN_DAYS.includes(date.getUTCDay()) || exception.closed) {
+            return null;
+        }
+
+        const closes = exception.closes || CLOSES;
+        const opens = toMinutes(OPENS);
+
+        let end = toMinutes(closes);
+
+        if (end <= opens) {
+            end += 24 * 60;
+        }
+
+        return { opens, closes, end, early: Boolean(exception.closes) };
+    }
+
+
+    function nextOpening(today, minutes) {
+
+        const tonight = evening(today);
+
+        if (tonight && minutes < tonight.opens) {
+            return "oggi";
+        }
+
+        for (let offset = 1; offset <= 7; offset++) {
+
+            const day = addDays(today, offset);
+
+            if (evening(day)) {
+                return offset === 1 ? "domani" : DAY_NAMES[day.getUTCDay()];
+            }
+        }
+
+        return null;
     }
 
 
     function getStatus() {
 
-        const { day, minutes } = nowInRome();
+        const { date: today, minutes } = nowInRome();
 
-        const opens = toMinutes(OPENS);
-        const closes = toMinutes(CLOSES);
+        const tonight = evening(today);
+        const lastNight = evening(addDays(today, -1));
 
-        const yesterday = (day + 6) % 7;
-
-        const isOpen =
-            (OPEN_DAYS.includes(day) && minutes >= opens) ||
-            (OPEN_DAYS.includes(yesterday) && minutes < closes);
-
-        if (isOpen) {
-            return {
-                open: true,
-                text: `Aperto ora · fino alle ${CLOSES}`
-            };
+        // Serata di oggi in corso
+        if (tonight && minutes >= tonight.opens && minutes < tonight.end) {
+            return { open: true, text: `Aperto ora · fino alle ${tonight.closes}` };
         }
 
-
-        if (OPEN_DAYS.includes(day) && minutes < opens) {
-            return {
-                open: false,
-                text: `Chiuso · apre oggi alle ${OPENS}`
-            };
+        // Coda della serata di ieri, dopo mezzanotte
+        if (lastNight && minutes < lastNight.end - 24 * 60) {
+            return { open: true, text: `Aperto ora · fino alle ${lastNight.closes}` };
         }
 
+        const when = nextOpening(today, minutes);
+        const reopens = when ? ` · apre ${when} alle ${OPENS}` : "";
 
-        for (let offset = 1; offset <= 7; offset++) {
-
-            const next = (day + offset) % 7;
-
-            if (OPEN_DAYS.includes(next)) {
-
-                const when = offset === 1
-                    ? "domani"
-                    : DAY_NAMES[next];
-
-                return {
-                    open: false,
-                    text: `Chiuso · apre ${when} alle ${OPENS}`
-                };
-            }
+        // Serata di oggi annullata per eccezione
+        if ((exceptions[isoDate(today)] || {}).closed && OPEN_DAYS.includes(today.getUTCDay())) {
+            return { open: false, text: `Chiuso stasera${reopens}` };
         }
 
-        return { open: false, text: "Chiuso" };
+        return { open: false, text: `Chiuso${reopens}` };
     }
 
 
@@ -127,8 +170,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    render();
+    function start() {
+        render();
+        setInterval(render, 60 * 1000);
+    }
 
-    setInterval(render, 60 * 1000);
+
+    fetch("hours.json", { cache: "no-store" })
+        .then(response => response.ok ? response.json() : { exceptions: [] })
+        .then(data => {
+            (data.exceptions || []).forEach(item => {
+                exceptions[item.date] = item;
+            });
+        })
+        .catch(error => console.error("Errore orari:", error))
+        .finally(start);
 
 });

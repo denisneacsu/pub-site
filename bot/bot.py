@@ -98,10 +98,11 @@ B_EVENTS = "📅 Eventi"
 B_PROMOS = "🏷️ Promozioni"
 B_MENU = "🍔 Menu"
 B_NOTICE = "📢 Avviso"
+B_TONIGHT = "🕑 Orario di stasera"
 B_MORE = "⚙️ Altro"
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_NOTICE, B_MORE]],
+    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_TONIGHT, B_NOTICE], [B_MORE]],
     resize_keyboard=True,
     is_persistent=True,
 )
@@ -389,6 +390,21 @@ def read_choice(step, raw, typed):
     if step == "notice":
         return (text[:200], None) if text else (None, "Il testo è vuoto.")
 
+    if step == "close_time":
+
+        time = parse_time(text)
+
+        if not time:
+            return None, "Non ho capito l'ora. Scrivila così: 00:30"
+
+        if not core.valid_early_close(time):
+            return None, (
+                f"Deve essere dopo le {core.NORMAL_OPENS} "
+                f"e prima delle {core.NORMAL_CLOSES}."
+            )
+
+        return time, None
+
     return text, None
 
 
@@ -464,6 +480,11 @@ async def handle_answer(update, context, raw, typed):
             ctx["item"].pop("description")
 
         return await ask_price(update, context, "add_price", ctx)
+
+    # --- Orario di stasera ---
+    if mode == "tonight":
+        ctx["closes"] = value
+        return await ask_tonight_notice(update, context, ctx)
 
     # --- Avviso ---
     if mode == "notice":
@@ -1154,6 +1175,123 @@ async def notice_action(update, context, action):
 
 
 # =========================================================
+# ORARIO DI STASERA (eccezione per una sola serata)
+# =========================================================
+
+async def tonight_screen(update, context):
+
+    context.user_data.pop("awaiting", None)
+
+    await in_repo(core.sync)
+
+    day = core.service_date()
+    label = short_date(day)
+
+    if not core.normally_open(day):
+        return await respond(
+            update,
+            f"🕑 <b>Stasera</b> ({label})\nIl locale è chiuso per orario normale (lunedì).",
+        )
+
+    exception = core.get_exception(day)
+
+    if not exception:
+        status = f"{core.NORMAL_OPENS} – {core.NORMAL_CLOSES} (orario normale)"
+    elif exception.get("closed"):
+        status = "🚫 Chiuso stasera"
+    else:
+        status = f"{core.NORMAL_OPENS} – <b>{exception['closes']}</b> (chiude prima)"
+
+    rows = [[("🌙 Chiudiamo prima", "tn:early"), ("🚫 Stasera chiuso", "tn:closed")]]
+
+    if exception:
+        rows.append([("↩️ Torna all'orario normale", "tn:reset")])
+
+    await respond(
+        update,
+        f"🕑 <b>Stasera</b> ({label})\n{status}\n\n"
+        "Le modifiche valgono solo per questa serata: "
+        "domani torna da solo l'orario normale.",
+        keyboard(*rows),
+    )
+
+
+async def tonight_action(update, context, action):
+
+    day = core.service_date()
+    ctx = {"mode": "tonight", "date": day.isoformat()}
+
+    if action == "early":
+        return await ask(
+            update, context, "close_time", ctx,
+            f"🌙 A che ora <b>chiudete</b> stasera ({short_date(day)})? Scegli o scrivi",
+            [
+                [("23:00", "23:00"), ("23:30", "23:30"), ("00:00", "00:00")],
+                [("00:30", "00:30"), ("01:00", "01:00"), ("01:30", "01:30")],
+                [("02:00", "02:00")],
+            ],
+        )
+
+    if action == "closed":
+        ctx["closed"] = True
+        return await ask_tonight_notice(update, context, ctx)
+
+    if action == "reset":
+        return await propose(
+            update, context,
+            {"kind": "tonight", "date": day.isoformat(), "reset": True},
+            f"↩️ Stasera ({short_date(day)}) torna l'orario normale: "
+            f"{core.NORMAL_OPENS} – {core.NORMAL_CLOSES}.",
+        )
+
+
+async def ask_tonight_notice(update, context, ctx):
+
+    context.user_data.pop("awaiting", None)
+    context.user_data["tonight"] = ctx
+
+    await update.effective_message.reply_text(
+        "📢 Mostro anche un avviso sul sito fino a domattina?\n"
+        f"«{esc(core.tonight_notice(ctx))}»",
+        reply_markup=keyboard(
+            [("✅ Sì, con avviso", "tn:notice:yes"), ("No", "tn:notice:no")],
+            [CANCEL],
+        ),
+        parse_mode="HTML",
+    )
+
+
+async def tonight_confirm(update, context, with_notice):
+
+    ctx = context.user_data.pop("tonight", None)
+
+    if not ctx:
+        return await respond(update, "Scelta scaduta, ricomincia da 🕑 Orario di stasera.")
+
+    await respond(update, "📢 Con avviso" if with_notice else "Senza avviso")
+
+    label = short_date(date.fromisoformat(ctx["date"]))
+
+    if ctx.get("closed"):
+        summary = f"🚫 <b>Stasera ({label}) chiuso</b>"
+    else:
+        summary = (
+            f"🌙 <b>Stasera ({label})</b>\nChiudiamo alle <b>{ctx['closes']}</b> "
+            f"invece delle {core.NORMAL_CLOSES}."
+        )
+
+    if with_notice:
+        summary += f"\n📢 Avviso: «{esc(core.tonight_notice(ctx))}»"
+
+    summary += "\nDomani torna da solo l'orario normale."
+
+    change = {"kind": "tonight", "date": ctx["date"], "notice": with_notice}
+    change.update({k: ctx[k] for k in ("closes", "closed") if k in ctx})
+
+    await propose(update, context, change, summary)
+
+
+# =========================================================
 # ALTRO: annulla, ultime modifiche, guida
 # =========================================================
 
@@ -1165,6 +1303,7 @@ Usa i pulsanti in basso 👇
 📷 <b>Nuova locandina</b> — manda la foto (meglio come file 📎) e rispondi alle domande. Prima di pubblicare vedi l'anteprima.
 📅 <b>Eventi</b> · 🏷️ <b>Promozioni</b> — modifica titolo, data, ora, scadenza, oppure togli.
 🍔 <b>Menu</b> — categoria → voce → prezzo, nome, descrizione, homepage, nascondi, elimina. ➕ per aggiungere.
+🕑 <b>Orario di stasera</b> — chiudete prima o restate chiusi una sera, senza cambiare gli orari normali.
 📢 <b>Avviso</b> — barra in fondo al sito per comunicazioni veloci.
 ⚙️ <b>Altro</b> — annulla l'ultima modifica, storico.
 
@@ -1357,6 +1496,7 @@ MAIN_ACTIONS = {
     B_PROMOS: lambda u, c: entries_screen(u, c, promos=True),
     B_MENU: menu_screen,
     B_NOTICE: notice_screen,
+    B_TONIGHT: tonight_screen,
     B_MORE: more_screen,
 }
 
@@ -1439,6 +1579,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if head == "notice":
         return await notice_action(update, context, rest)
+
+    if head == "tn":
+        if rest.startswith("notice:"):
+            return await tonight_confirm(update, context, rest.endswith("yes"))
+        return await tonight_action(update, context, rest)
 
     if data == "more":
         return await more_screen(update, context)
@@ -1552,6 +1697,7 @@ async def post_init(app: Application):
         BotCommand("eventi", "Eventi sul sito"),
         BotCommand("promozioni", "Promozioni sul sito"),
         BotCommand("avviso", "Avviso in fondo al sito"),
+        BotCommand("stasera", "Orario di stasera (chiusura anticipata)"),
         BotCommand("aiuto", "Come si usa"),
         BotCommand("stop", "Interrompe la domanda in corso"),
     ])
@@ -1587,6 +1733,7 @@ def main():
         "eventi": lambda u, c: entries_screen(u, c, promos=False),
         "promozioni": lambda u, c: entries_screen(u, c, promos=True),
         "avviso": cmd_notice,
+        "stasera": tonight_screen,
         "annulla": lambda u, c: more_action(u, c, "undo"),
         "stato": lambda u, c: more_action(u, c, "log"),
         "prezzo": cmd_price,
