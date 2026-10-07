@@ -38,6 +38,9 @@ ICON_BACKGROUND = (17, 16, 15)
 # Sotto questa luminosità (0-255) un bordo è considerato "nero"
 BLACK_THRESHOLD = 24
 
+# Bande nere tolte solo se occupano più di questa parte dell'immagine
+MIN_BORDER_RATIO = 0.15
+
 
 def max_width(relative_path):
     """Larghezza massima in base al tipo di immagine."""
@@ -66,7 +69,14 @@ def trim_black_borders(image):
 
     box = mask.getbbox()
 
-    return image.crop(box) if box else image
+    if not box:
+        return image
+
+    # Si taglia solo se le bande sono grandi (screenshot del telefono):
+    # una locandina con sfondo nero resta intera, margini compresi.
+    removed = 1 - (box[2] - box[0]) * (box[3] - box[1]) / (image.width * image.height)
+
+    return image.crop(box) if removed > MIN_BORDER_RATIO else image
 
 
 def make_icons(logo):
