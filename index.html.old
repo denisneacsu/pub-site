@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>MEMPHIS① | Birreria e cucina a Mercenasco</title>
+
+    <meta
+        name="description"
+        content="MEMPHIS① — birreria e cucina a Mercenasco. Birre, panini, fritti, cocktail e serate in compagnia."
+    >
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+
+<body>
+
+    <!-- ================================
+         HEADER
+    ================================= -->
+
+    <header class="site-header">
+
+        <div class="container header-inner">
+
+            <a href="#home" class="logo" aria-label="MEMPHIS① - Home">
+                <img
+                    src="images/logo.png"
+                    alt="MEMPHIS①"
+                >
+            </a>
+
+            <a href="#home" class="header-brand-name">
+                MEMPHIS①
+            </a>
+
+            <nav class="desktop-nav" aria-label="Navigazione principale">
+
+                <a href="#locale">
+                    Il locale
+                </a>
+
+                <a href="#specialita">
+                    Specialità
+                </a>
+
+                <a href="#menu">
+                    Menu
+                </a>
+
+                <a href="#contatti">
+                    Dove siamo
+                </a>
+
+            </nav>
+
+            <a
+                href="#menu"
+                class="header-menu-btn"
+            >
+                Guarda il menu
+            </a>
+
+        </div>
+
+    </header>
+
+
+    <main>
+
+        <!-- ================================
+             HERO
+        ================================= -->
+
+        <section class="hero" id="home">
+
+            <div class="hero-image">
+
+                <img
+                    src="images/hero_birra_panino_16-9.jpg"
+                    alt="Birra e panino al MEMPHIS①"
+                >
+
+            </div>
+
+
+            <div class="hero-overlay"></div>
+
+
+            <div class="container hero-content">
+
+                <p class="eyebrow">
+                    MEMPHIS① · MERCENASCO
+                </p>
+
+
+                <h1>
+                    Birra, cucina<br>
+                    e serate in compagnia.
+                </h1>
+
+
+                <p class="hero-text">
+                    Birre, panini, fritti e cocktail.
+                    Un posto dove fermarsi a mangiare,
+                    bere qualcosa e passare la serata.
+                </p>
+
+
+                <div class="hero-actions">
+
+                    <a
+                        href="#menu"
+                        class="btn btn-primary"
+                    >
+                        Guarda il menu
+                    </a>
+
+
+                    <a
+                        href="https://www.google.com/maps/dir/?api=1&destination=Memphis+1+Ristopub,+Via+Roma+17,+Mercenasco+TO"
+                        class="btn btn-outline"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        Come arrivare
+                    </a>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================================
+             INTRO
+        ================================= -->
+
+        <section class="intro section">
+
+            <div class="container intro-content">
+
+                <p class="eyebrow">
+                    COSA TROVI
+                </p>
+
+
+                <h2>
+                    Una birra, qualcosa da mangiare
+                    e un tavolo con gli amici.
+                </h2>
+
+
+                <p>
+                    Al MEMPHIS① trovi birre, panini, fritti,
+                    cocktail e piatti da ordinare durante la serata.
+                    Puoi venire per cena, per una birra o per
+                    fermarti a giocare con gli amici.
+                </p>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================================
+             SPECIALITÀ
+        ================================= -->
+
+        <section
+            class="specialita section"
+            id="specialita"
+        >
+
+            <div class="container">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="eyebrow">
+                            DALLA CUCINA
+                        </p>
+
+                        <h2>
+                            Cosa trovi da mangiare
+                        </h2>
+
+                    </div>
+
+
+                    <p>
+                        Alcune delle proposte del menu.
+                        Per vedere tutte le portate puoi consultare
+                        il menu completo.
+                    </p>
+
+                </div>
+
+
+
+                <div class="specialita-grid">
+
+
+                    <!-- PULLED PORK -->
+
+                    <article class="specialita-card">
+
+                        <div class="specialita-image">
+
+                            <img
+                                src="images/birra_panino_quadrata.jpg"
+                                alt="Panino con pulled pork e birra"
+                            >
+
+                        </div>
+
+
+                        <div class="specialita-content">
+
+                            <span class="card-label">
+                                PANINO
+                            </span>
+
+
+                            <h3>
+                                Pulled Pork
+                            </h3>
+
+
+                            <p>
+                                Un panino con pulled pork
+                                da accompagnare a una birra.
+                            </p>
+
+                        </div>
+
+                    </article>
+
+
+
+                    <!-- RIBS -->
+
+                    <article class="specialita-card specialita-dark">
+
+                        <div class="specialita-placeholder">
+
+                            <span>
+                                RIBS
+                            </span>
+
+                            <small>
+                                Foto in arrivo
+                            </small>
+
+                        </div>
+
+
+                        <div class="specialita-content">
+
+                            <span class="card-label">
+                                PIATTO
+                            </span>
+
+
+                            <h3>
+                                Ribs
+                            </h3>
+
+
+                            <p>
+                                Ribs di maiale preparate
+                                dalla cucina del locale.
+                            </p>
+
+
+                            <a
+                                href="#menu"
+                                class="text-link"
+                            >
+                                Vedi nel menu
+                            </a>
+
+                        </div>
+
+                    </article>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================================
+             IL LOCALE
+        ================================= -->
+
+        <section
+            class="locale section"
+            id="locale"
+        >
+
+            <div class="container locale-grid">
+
+                <div class="locale-image">
+
+                    <img
+                        src="images/sala_16-9.jpg"
+                        alt="Sala del MEMPHIS① con calcio balilla"
+                    >
+
+                </div>
+
+
+                <div class="locale-content">
+
+                    <p class="eyebrow">
+                        IL LOCALE
+                    </p>
+
+
+                    <h2>
+                        Non si viene solo per mangiare.
+                    </h2>
+
+
+                    <p>
+                        Puoi fermarti per una birra,
+                        mangiare qualcosa e passare
+                        la serata giocando con gli amici.
+                    </p>
+
+
+                    <div class="activities">
+
+
+                        <div class="activity">
+
+                            <div>
+
+                                <h3>
+                                    Biliardo
+                                </h3>
+
+                                <p>
+                                    Una partita durante la serata,
+                                    prima o dopo aver mangiato.
+                                </p>
+
+                            </div>
+
+                        </div>
+
+
+
+                        <div class="activity">
+
+                            <div>
+
+                                <h3>
+                                    Calcio balilla
+                                </h3>
+
+                                <p>
+                                    Una sfida con gli amici
+                                    tra una birra e l'altra.
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================================
+             MENU
+        ================================= -->
+
+        <section
+            class="menu-preview section"
+            id="menu"
+        >
+
+            <div class="container">
+
+                <div class="section-heading menu-heading">
+
+                    <div>
+
+                        <p class="eyebrow">
+                            IL MENU
+                        </p>
+
+
+                        <h2>
+                            Cosa puoi ordinare
+                        </h2>
+
+                    </div>
+
+
+                    <p>
+                        Una selezione di piatti, panini,
+                        fritti, birre e cocktail.
+                    </p>
+
+                </div>
+
+
+
+                <div class="menu-grid">
+
+
+                    <!-- =========================
+                         CIBO
+                    ========================== -->
+
+                    <div class="menu-column">
+
+                        <div class="menu-column-title">
+                            <span>CIBO</span>
+                        </div>
+
+
+
+                        <!-- FRITTI -->
+
+                        <div class="menu-category">
+
+                            <h3>
+                                Fritti
+                            </h3>
+
+
+                            <div class="menu-item">
+
+                                <div>
+                                    <strong>
+                                        Patatine Fritte
+                                    </strong>
+                                </div>
+
+                                <span>
+                                    € 5,50
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <div>
+                                    <strong>
+                                        Anelli di cipolla
+                                    </strong>
+                                </div>
+
+                                <span>
+                                    € 5,50
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <div>
+                                    <strong>
+                                        Nuggets
+                                    </strong>
+                                </div>
+
+                                <span>
+                                    € 5,50
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <div>
+                                    <strong>
+                                        Patatine cheddar e bacon
+                                    </strong>
+                                </div>
+
+                                <span>
+                                    € 6,50
+                                </span>
+
+                            </div>
+
+                        </div>
+
+
+
+                        <!-- PANINI -->
+
+                        <div class="menu-category">
+
+                            <h3>
+                                Panini
+                            </h3>
+
+
+                            <div class="menu-item">
+
+                                <div>
+
+                                    <strong>
+                                        Grifondoro
+                                    </strong>
+
+                                    <small>
+                                        Cotoletta, maionese,
+                                        insalata e pomodoro
+                                    </small>
+
+                                </div>
+
+                                <span>
+                                    € 7,00
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <div>
+
+                                    <strong>
+                                        Piton
+                                    </strong>
+
+                                    <small>
+                                        Salsiccia e crauti
+                                    </small>
+
+                                </div>
+
+                                <span>
+                                    € 6,50
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <div>
+
+                                    <strong>
+                                        Hagrid
+                                    </strong>
+
+                                    <small>
+                                        Porchetta, insalata,
+                                        maionese e pomodoro
+                                    </small>
+
+                                </div>
+
+                                <span>
+                                    € 6,50
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <!-- =========================
+                         BEVANDE
+                    ========================== -->
+
+                    <div class="menu-column">
+
+                        <div class="menu-column-title">
+                            <span>BEVANDE</span>
+                        </div>
+
+
+
+                        <!-- BIRRE -->
+
+                        <div class="menu-category">
+
+                            <h3>
+                                Birre
+                            </h3>
+
+
+                            <div class="beer-item">
+
+                                <div>
+                                    <strong>
+                                        Hoegaarden
+                                    </strong>
+                                </div>
+
+                                <div class="beer-prices">
+                                    <span>€ 4,00</span>
+                                    <span>€ 7,00</span>
+                                </div>
+
+                            </div>
+
+
+                            <div class="beer-item">
+
+                                <div>
+                                    <strong>
+                                        Leffe Rouge
+                                    </strong>
+                                </div>
+
+                                <div class="beer-prices">
+                                    <span>€ 4,00</span>
+                                    <span>€ 7,00</span>
+                                </div>
+
+                            </div>
+
+
+                            <div class="beer-item">
+
+                                <div>
+                                    <strong>
+                                        Leffe Ambrée
+                                    </strong>
+                                </div>
+
+                                <div class="beer-prices">
+                                    <span>€ 4,00</span>
+                                    <span>€ 7,00</span>
+                                </div>
+
+                            </div>
+
+
+                            <div class="beer-item">
+
+                                <div>
+                                    <strong>
+                                        Stella Artois
+                                    </strong>
+                                </div>
+
+                                <div class="beer-prices">
+                                    <span>€ 3,50</span>
+                                    <span>€ 6,00</span>
+                                </div>
+
+                            </div>
+
+
+                            <div class="beer-item">
+
+                                <div>
+                                    <strong>
+                                        Tennent's
+                                    </strong>
+                                </div>
+
+                                <div class="beer-prices">
+                                    <span>€ 4,00</span>
+                                    <span>—</span>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+
+                        <!-- COCKTAIL -->
+
+                        <div class="menu-category">
+
+                            <h3>
+                                Cocktail
+                            </h3>
+
+
+                            <div class="menu-item">
+
+                                <strong>
+                                    Spritz
+                                </strong>
+
+                                <span>
+                                    € 6,00
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <strong>
+                                    Mojito
+                                </strong>
+
+                                <span>
+                                    € 8,00
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <strong>
+                                    Negroni
+                                </strong>
+
+                                <span>
+                                    € 7,00
+                                </span>
+
+                            </div>
+
+
+                            <div class="menu-item">
+
+                                <strong>
+                                    Moscow Mule
+                                </strong>
+
+                                <span>
+                                    € 10,00
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="menu-note">
+
+                    <p>
+                        Il menu e i prezzi possono subire variazioni.
+                    </p>
+
+                </div>
+
+
+                <div class="menu-cta">
+
+                    <a
+                        href="#"
+                        class="btn btn-primary"
+                    >
+                        Visualizza tutto il menu
+                    </a>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================================
+             GALLERY
+        ================================= -->
+
+        <section class="gallery section">
+
+            <div class="container">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="eyebrow">
+                            IL LOCALE
+                        </p>
+
+
+                        <h2>
+                            Guarda gli spazi
+                        </h2>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="gallery-grid">
+
+                    <div class="gallery-item gallery-large">
+
+                        <img
+                            src="images/sala_16-9.jpg"
+                            alt="Sala del MEMPHIS①"
+                        >
+
+                    </div>
+
+
+                    <div class="gallery-item">
+
+                        <img
+                            src="images/birra_panino_quadrata.jpg"
+                            alt="Birra e panino"
+                        >
+
+                    </div>
+
+
+                    <div class="gallery-item gallery-dark">
+
+                        <img
+                            src="images/sala_quadrata.jpg"
+                            alt="Interno del MEMPHIS①"
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================================
+             SOCIAL
+        ================================= -->
+
+        <section class="social section">
+
+            <div class="container social-inner">
+
+                <div>
+
+                    <p class="eyebrow">
+                        SOCIAL
+                    </p>
+
+
+                    <h2>
+                        Foto, aggiornamenti e serate.
+                    </h2>
+
+                </div>
+
+
+                <div class="social-links">
+
+                    <a
+                        href="https://www.instagram.com/memphisristopub"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        Instagram
+                    </a>
+
+
+                    <a
+                        href="https://wa.me/3714952872"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        WhatsApp
+                    </a>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================================
+             CONTATTI
+        ================================= -->
+
+        <section
+            class="contacts section"
+            id="contatti"
+        >
+
+            <div class="container">
+
+                <div class="contacts-header">
+
+                    <p class="eyebrow">
+                        DOVE SIAMO
+                    </p>
+
+
+                    <h2>
+                        Ci trovi a Mercenasco.
+                    </h2>
+
+                </div>
+
+
+
+                <div class="contacts-grid">
+
+
+                    <!-- INDIRIZZO -->
+
+                    <div class="contact-box">
+
+                        <span class="contact-label">
+                            INDIRIZZO
+                        </span>
+
+
+                        <p>
+                            Via Roma, 17<br>
+                            Mercenasco (TO)
+                        </p>
+
+
+                        <a
+                            href="https://www.google.com/maps/dir/?api=1&destination=Memphis+1+Ristopub,+Via+Roma+17,+Mercenasco+TO"
+                            target="_blank"
+                            rel="noopener"
+                            class="text-link"
+                        >
+                            Come arrivare
+                        </a>
+
+                    </div>
+
+
+
+                    <!-- ORARI -->
+
+                    <div class="contact-box">
+
+                        <span class="contact-label">
+                            ORARI
+                        </span>
+
+
+                        <p>
+                            Da martedì a domenica<br>
+                            17:00 – 02:00
+                        </p>
+
+                    </div>
+
+
+
+                    <!-- WHATSAPP -->
+
+                    <div class="contact-box">
+
+                        <span class="contact-label">
+                            WHATSAPP
+                        </span>
+
+
+                        <p>
+                            Hai una domanda?
+                            Scrivici direttamente.
+                        </p>
+
+
+                        <a
+                            href="https://wa.me/3714952872"
+                            target="_blank"
+                            rel="noopener"
+                            class="text-link"
+                        >
+                            Scrivici su WhatsApp
+                        </a>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="map-container">
+
+                    <iframe
+                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d89680.51374259236!2d7.8294267443399335!3d45.37875989656816!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47888117f30ec0b9%3A0xbcb9d2e49c79af99!2sMemphis%201%20Ristopub!5e0!3m2!1sit!2sit!4v1790357917548!5m2!1sit!2sit"
+                        title="Mappa per raggiungere MEMPHIS①"
+                        width="100%"
+                        height="400"
+                        style="border:0;"
+                        allowfullscreen=""
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade">
+                    </iframe>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+
+    <!-- ================================
+         FOOTER
+    ================================= -->
+
+    <footer class="site-footer">
+
+        <div class="container footer-inner">
+
+
+            <div class="footer-brand-info">
+
+                <img
+                    src="images/logo.png"
+                    alt="MEMPHIS①"
+                >
+
+
+                <p>
+                    MEMPHIS① · Birreria · Cucina · Serate
+                </p>
+
+
+                <p>
+                    Via Roma, 17 · Mercenasco (TO)
+                </p>
+
+            </div>
+
+
+
+            <div class="footer-links">
+
+                <a href="#menu">
+                    Menu
+                </a>
+
+
+                <a href="#locale">
+                    Il locale
+                </a>
+
+
+                <a href="#specialita">
+                    Specialità
+                </a>
+
+
+                <a href="#contatti">
+                    Dove siamo
+                </a>
+
+            </div>
+
+
+
+            <p class="copyright">
+
+                © 2026 MEMPHIS① ·
+
+                <a
+                    href="https://denisneacsu.com"
+                    target="_blank"
+                    rel="noopener"
+                >
+                    Realizzato da denisneacsu.com
+                </a>
+
+            </p>
+
+        </div>
+
+    </footer>
+
+
+</body>
+
+</html>
