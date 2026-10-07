@@ -31,7 +31,7 @@
                         { "name": "Porchetta alla piastra", "price": 12 },
                         { "name": "Salsiccia alla griglia", "description": "Servita con insalata o patatine.", "price": 14 },
                         { "name": "Milanese con patatine", "price": 15 },
-                        { "name": "Piatto RIBS", "description": "Piatto roba di maiale", "price": 12.5 }
+                        { "name": "Piatto RIBS", "description": "Piatto roba di maiale", "price": 12.5, "featured": true }
                     ]
                 },
                 {
