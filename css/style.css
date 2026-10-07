@@ -2069,7 +2069,7 @@ a:focus-visible {
 
 
     .menu-preview-item {
-        padding-block: 15px;
+        padding-block: 12px;
     }
 
 
@@ -2107,21 +2107,27 @@ a:focus-visible {
 .menu-preview-item {
     display: flex;
 
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: baseline;
 
-    gap: 20px;
+    gap: 10px;
 
-    padding-block: 18px;
-
-    border-bottom: 1px solid var(--border);
+    padding-block: 14px;
 }
 
 
 .menu-preview-item strong {
-    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+}
 
-    font-size: 0.95rem;
+
+/* Linea puntinata tra nome e prezzo */
+.menu-preview-item .menu-leader {
+    flex: 1 1 auto;
+
+    min-width: 24px;
+
+    border-bottom: 1px dotted var(--border-light);
 }
 
 

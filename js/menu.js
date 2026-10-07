@@ -254,11 +254,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function renderFeaturedItem(item) {
 
-        const description = item.description
-            ? `<small>${escapeHtml(item.description)}</small>`
-            : "";
-
         /*
+         * Nell'anteprima niente descrizioni: solo nome e prezzo,
+         * così le righe delle due colonne restano allineate.
          * Per le voci con più prezzi (es. birre piccola/media)
          * si mostra il prezzo più basso.
          */
@@ -269,12 +267,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return `
             <div class="menu-preview-item">
 
-                <div>
-                    <strong>${escapeHtml(item.name)}</strong>
-                    ${description}
-                </div>
+                <strong>${escapeHtml(item.name)}</strong>
 
-                <span>${price}</span>
+                <span class="menu-leader" aria-hidden="true"></span>
+
+                <span class="menu-price">${price}</span>
 
             </div>
         `;
