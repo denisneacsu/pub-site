@@ -6,52 +6,61 @@ Gira su una copia dedicata del repository (~/memphis-bot/site) e per ogni
 modifica: aggiorna i file, mostra un'anteprima, e dopo la conferma fa
 commit + push. GitHub Pages pubblica in 1-2 minuti.
 
+Si usa con i pulsanti: tastiera fissa in basso (Locandina, Eventi,
+Promozioni, Menu, Avviso, Altro) e menu a pulsanti dentro i messaggi.
+I comandi scritti (/prezzo, /avviso...) restano come scorciatoie.
+
 Configurazione in ~/memphis-bot/.env:
 
     TELEGRAM_TOKEN=...          token da @BotFather
     ALLOWED_USER_IDS=123,456    ID Telegram autorizzati
 
-Comandi: vedi HELP qui sotto.
+La parte su file, git e anteprime è in core.py.
 """
 
 import asyncio
+import calendar
 import difflib
 import html
 import json
 import logging
-import re
-import shutil
-import ssl
-import subprocess
-import sys
-import threading
-import unicodedata
-from datetime import date, datetime, timedelta
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from datetime import date, timedelta
 from pathlib import Path
-from urllib.request import urlopen
-from zoneinfo import ZoneInfo
 
-from playwright.sync_api import sync_playwright
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    Update,
+)
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
-    ConversationHandler,
     MessageHandler,
     filters,
 )
 
+import core
+from core import (
+    SITE,
+    UPLOADS,
+    format_date,
+    format_price,
+    item_price,
+    normalize,
+    parse_date,
+    parse_prices,
+    parse_time,
+    read_json,
+    short_date,
+    slugify,
+    today,
+)
 
-SITE = Path(__file__).resolve().parent.parent
-BOT_HOME = SITE.parent
-UPLOADS = BOT_HOME / "uploads"
-
-LIVE_URLS = ("https://memphisristopub.it", "http://memphisristopub.it")
-
-TZ = ZoneInfo("Europe/Rome")
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -61,57 +70,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("memphis-bot")
 
 
-HELP = """\
-<b>Bot del sito MEMPHIS①</b>
-
-📷 <b>Locandina</b>: manda la foto (meglio come <i>file</i>, per la qualità) e rispondi alle domande.
-Scorciatoie nella didascalia:
-• <code>Halloween 31/10 19:30</code> → evento
-• <code>promo Ribs</code> oppure <code>promo Ribs fino 30/11</code> → promozione
-
-📋 /eventi · /promozioni — elenco, con pulsante per togliere
-
-🍔 <b>Menu</b>
-• <code>/prezzo spritz 6,50</code>
-• <code>/prezzo leffe rouge 4 7</code> (piccola e media)
-• <code>/nascondi picanha</code> · <code>/mostra picanha</code>
-
-📢 <code>/avviso Chiuso per ferie dal 10 al 20/8</code> · <code>/avviso off</code>
-
-↩️ /annulla — annulla l'ultima modifica del bot
-🕑 /stato — ultime modifiche al sito
-✋ /stop — interrompe una locandina a metà
-
-Prima di pubblicare chiedo sempre conferma, con un'anteprima."""
-
-
-# =========================================================
-# CONFIGURAZIONE
-# =========================================================
-
-def load_env():
-
-    # Sicurezza: il bot fa "git reset --hard", quindi deve girare solo
-    # nella sua copia (~/memphis-bot/site), mai nella cartella di sviluppo.
-    if SITE.name != "site" or not (BOT_HOME / ".env").exists():
-        raise SystemExit(
-            f"Il bot va avviato da ~/memphis-bot/site, non da {SITE}"
-        )
-
-    env = {}
-
-    for line in (BOT_HOME / ".env").read_text().splitlines():
-
-        line = line.strip()
-
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            env[key.strip()] = value.strip()
-
-    return env
-
-
-ENV = load_env()
+ENV = core.load_env()
 
 ALLOWED = {
     int(value)
@@ -121,348 +80,75 @@ ALLOWED = {
 
 AUTH = filters.User(user_id=ALLOWED)
 
+SITE_URL = "https://memphisristopub.it"
+
 
 # =========================================================
-# FILE DEL SITO
+# TASTIERE
 # =========================================================
 
-def read_json(name):
-    return json.loads((SITE / name).read_text())
+B_POSTER = "📷 Nuova locandina"
+B_EVENTS = "📅 Eventi"
+B_PROMOS = "🏷️ Promozioni"
+B_MENU = "🍔 Menu"
+B_NOTICE = "📢 Avviso"
+B_MORE = "⚙️ Altro"
+
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_NOTICE, B_MORE]],
+    resize_keyboard=True,
+    is_persistent=True,
+)
+
+CANCEL = ("✖️ Annulla", "cancel")
 
 
-def write_json(name, data):
-    (SITE / name).write_text(
-        json.dumps(data, ensure_ascii=False, indent=4) + "\n"
-    )
+def keyboard(*rows):
+    """Tastiera nel messaggio: righe di (testo, callback_data | URL)."""
+
+    def button(label, data):
+        if data.startswith("http"):
+            return InlineKeyboardButton(label, url=data)
+        return InlineKeyboardButton(label, callback_data=data)
+
+    return InlineKeyboardMarkup([
+        [button(label, data) for label, data in row]
+        for row in rows if row
+    ])
 
 
-def format_menu(menu):
+def pairs(buttons):
+    """Pulsanti a due per riga."""
+    return [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+
+
+def esc(text):
+    return html.escape(str(text))
+
+
+async def respond(update, text, markup=None):
     """
-    menu.json con una voce per riga, così resta leggibile
-    a mano e ogni modifica del bot tocca una riga sola.
+    Dai pulsanti di navigazione si aggiorna lo stesso messaggio,
+    così la chat non si riempie; altrimenti si manda un messaggio nuovo.
     """
 
-    def value(v):
-        return json.dumps(v, ensure_ascii=False)
+    query = update.callback_query
 
-    def one_line(item):
-        return "{ " + ", ".join(
-            f"{value(k)}: {value(v)}" for k, v in item.items()
-        ) + " }"
+    if query and query.message and query.message.text is not None:
+        try:
+            return await query.edit_message_text(
+                text, reply_markup=markup, parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+        except BadRequest as error:
+            if "not modified" in str(error):
+                return
+            raise
 
-    lines = ["{", f'    "note": {value(menu.get("note", ""))},', "", '    "sections": [']
-
-    for s_index, section in enumerate(menu["sections"]):
-
-        lines += [
-            "        {",
-            f'            "title": {value(section["title"])},',
-            '            "categories": [',
-        ]
-
-        for c_index, category in enumerate(section["categories"]):
-
-            lines.append("                {")
-
-            for key, v in category.items():
-                if key != "items":
-                    lines.append(f"                    {value(key)}: {value(v)},")
-
-            lines.append('                    "items": [')
-
-            items = category["items"]
-
-            for i_index, item in enumerate(items):
-                comma = "," if i_index < len(items) - 1 else ""
-                lines.append(f"                        {one_line(item)}{comma}")
-
-            lines.append("                    ]")
-
-            comma = "," if c_index < len(section["categories"]) - 1 else ""
-            lines.append("                }" + comma)
-
-        lines.append("            ]")
-
-        comma = "," if s_index < len(menu["sections"]) - 1 else ""
-        lines.append("        }" + comma)
-
-    lines += ["    ]", "}"]
-
-    return "\n".join(lines) + "\n"
-
-
-def write_menu(menu):
-    (SITE / "menu.json").write_text(format_menu(menu))
-
-
-# =========================================================
-# GIT
-# =========================================================
-
-def git(*args):
-
-    result = subprocess.run(
-        ["git", *args],
-        cwd=SITE,
-        capture_output=True,
-        text=True,
+    return await update.effective_message.reply_text(
+        text, reply_markup=markup, parse_mode="HTML",
+        disable_web_page_preview=True,
     )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"git {' '.join(args)}: {result.stderr.strip()}")
-
-    return result.stdout.strip()
-
-
-def sync():
-    """Allinea la copia del bot a GitHub, scartando residui locali."""
-
-    git("fetch", "--quiet", "origin")
-    git("reset", "--quiet", "--hard", "origin/main")
-    git("clean", "--quiet", "-fd")
-
-
-def commit_and_push(message, paths):
-
-    git("add", "-A", "--", *paths)
-
-    if not git("status", "--porcelain", "--", *paths):
-        raise RuntimeError("Nessuna modifica da pubblicare.")
-
-    git("commit", "--quiet", "-m", message)
-
-    try:
-        git("push", "--quiet", "origin", "main")
-    except RuntimeError:
-        # Qualcuno ha pubblicato nel frattempo: ci si rimette in coda
-        git("pull", "--quiet", "--rebase", "origin", "main")
-        git("push", "--quiet", "origin", "main")
-
-    return git("rev-parse", "--short", "HEAD")
-
-
-# =========================================================
-# MODIFICHE
-#
-# Ogni modifica è un dizionario ("change") che apply_change()
-# applica ai file. Si applica due volte: per l'anteprima (poi
-# scartata) e alla conferma, su una copia appena allineata.
-# =========================================================
-
-def run_optimizer():
-
-    subprocess.run(
-        [sys.executable, str(SITE / "tools" / "ottimizza-immagini.py")],
-        cwd=SITE,
-        check=True,
-        capture_output=True,
-    )
-
-
-def published_image(stem):
-    """Percorso dell'immagine generata dallo script (.jpg o .png)."""
-
-    for ext in (".jpg", ".png"):
-        path = SITE / "images" / "events" / f"{stem}{ext}"
-        if path.exists():
-            return path.relative_to(SITE).as_posix()
-
-    raise RuntimeError("Immagine non generata.")
-
-
-def apply_change(change):
-    """Applica la modifica e restituisce (messaggio di commit, percorsi)."""
-
-    kind = change["kind"]
-
-    if kind in ("event", "promo"):
-
-        source_dir = SITE / "images-src" / "events"
-        source_dir.mkdir(parents=True, exist_ok=True)
-
-        upload = Path(change["upload"])
-        shutil.copy(upload, source_dir / f"{change['stem']}{upload.suffix.lower()}")
-
-        run_optimizer()
-
-        image = published_image(change["stem"])
-
-        events = read_json("events.json")
-
-        if kind == "event":
-            events.append({
-                "date": change["date"],
-                "time": change["time"],
-                "title": change["title"],
-                "image": image,
-            })
-            message = f"Evento: {change['title']} ({format_date(change['date'])})"
-        else:
-            # Le promozioni nuove vanno per prime
-            events.insert(0, {
-                "type": "promo",
-                "title": change["title"],
-                "image": image,
-                "until": change["until"],
-            })
-            message = f"Promozione: {change['title']}"
-
-        write_json("events.json", events)
-
-        return message, ["events.json", "images/events"]
-
-
-    if kind == "remove":
-
-        events = read_json("events.json")
-
-        removed = [e for e in events if e["image"] == change["image"]]
-        events = [e for e in events if e["image"] != change["image"]]
-
-        write_json("events.json", events)
-
-        stem = Path(change["image"]).stem
-
-        (SITE / change["image"]).unlink(missing_ok=True)
-
-        for source in (SITE / "images-src" / "events").glob(f"{stem}.*"):
-            source.unlink()
-
-        title = removed[0]["title"] if removed else stem
-
-        return f"Tolto: {title}", ["events.json", "images/events"]
-
-
-    if kind == "menu":
-
-        menu = read_json("menu.json")
-
-        item = find_item(menu, change["category"], change["name"])
-
-        for key, v in change["set"].items():
-            if v is None:
-                item.pop(key, None)
-            else:
-                item[key] = v
-
-        write_menu(menu)
-
-        return f"Menu: {change['summary']}", ["menu.json"]
-
-
-    if kind == "notice":
-
-        write_json("notice.json", {"text": change["text"]})
-
-        message = f"Avviso: {change['text']}" if change["text"] else "Avviso tolto"
-
-        return message, ["notice.json"]
-
-
-    raise ValueError(f"Modifica sconosciuta: {kind}")
-
-
-def find_item(menu, category_id, name):
-
-    for section in menu["sections"]:
-        for category in section["categories"]:
-            if category["id"] == category_id:
-                for item in category["items"]:
-                    if item["name"] == name:
-                        return item
-
-    raise RuntimeError(f"Voce non trovata: {name}")
-
-
-# =========================================================
-# ANTEPRIMA (server locale + browser senza interfaccia)
-# =========================================================
-
-class QuietHandler(SimpleHTTPRequestHandler):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(SITE), **kwargs)
-
-    def log_message(self, *args):
-        pass
-
-    def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
-        super().end_headers()
-
-
-def start_preview_server():
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
-
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-
-    return f"http://127.0.0.1:{server.server_address[1]}"
-
-
-PREVIEW_URL = start_preview_server()
-
-
-def screenshot(change):
-    """Screenshot da telefono della parte di sito toccata dalla modifica."""
-
-    kind = change["kind"]
-
-    if kind == "event":
-        page, selector = "index.html", "#eventi"
-    elif kind == "promo":
-        page, selector = "index.html", "#promozioni"
-    elif kind == "menu":
-        page, selector = "menu.html", f"#{change['category']}"
-    else:
-        page, selector = "index.html", None
-
-    with sync_playwright() as p:
-
-        browser = p.chromium.launch()
-
-        tab = browser.new_page(
-            viewport={"width": 390, "height": 844},
-            device_scale_factor=2,
-        )
-
-        tab.goto(f"{PREVIEW_URL}/{page}")
-        tab.wait_for_timeout(1200)
-
-        if selector and tab.locator(selector).count() and tab.locator(selector).is_visible():
-            image = tab.locator(selector).screenshot()
-        else:
-            image = tab.screenshot()
-
-        browser.close()
-
-    return image
-
-
-def preview(change):
-    """Applica la modifica, fa lo screenshot e la scarta."""
-
-    sync()
-
-    try:
-        apply_change(change)
-        return screenshot(change)
-    finally:
-        sync()
-
-        # La sorgente copiata per l'anteprima non deve restare
-        if change["kind"] in ("event", "promo"):
-            for source in (SITE / "images-src" / "events").glob(f"{change['stem']}.*"):
-                source.unlink()
-
-
-def publish(change):
-
-    sync()
-
-    message, paths = apply_change(change)
-
-    return commit_and_push(message, paths), paths
 
 
 # Una modifica alla volta sulla copia del repository
@@ -475,166 +161,72 @@ async def in_repo(func, *args):
 
 
 # =========================================================
-# UTILITÀ TESTO E DATE
-# =========================================================
-
-def normalize(text):
-
-    text = unicodedata.normalize("NFKD", text.lower())
-
-    return "".join(c for c in text if not unicodedata.combining(c)).strip()
-
-
-def slugify(text):
-
-    words = re.findall(r"[a-z0-9]+", normalize(text))
-
-    return "-".join(words)[:30] or "locandina"
-
-
-def today():
-    return datetime.now(TZ).date()
-
-
-def parse_date(text, future=True):
-    """'31/10', '31/10/2026', '31.10.26', 'oggi', 'domani'."""
-
-    text = normalize(text)
-
-    if text == "oggi":
-        return today()
-
-    if text == "domani":
-        return today() + timedelta(days=1)
-
-    match = re.fullmatch(r"(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?", text)
-
-    if not match:
-        return None
-
-    day, month, year = match.groups()
-
-    year = int(year) if year else today().year
-
-    if year < 100:
-        year += 2000
-
-    try:
-        result = date(year, int(month), int(day))
-    except ValueError:
-        return None
-
-    # Senza anno, una data già passata si intende l'anno prossimo
-    if future and not match.group(3) and result < today():
-        result = result.replace(year=year + 1)
-
-    return result
-
-
-def parse_time(text):
-
-    match = re.fullmatch(r"(?:ore\s*)?(\d{1,2})(?:[:.](\d{2}))?", normalize(text))
-
-    if not match:
-        return None
-
-    hours, minutes = int(match.group(1)), int(match.group(2) or 0)
-
-    if hours > 23 or minutes > 59:
-        return None
-
-    return f"{hours:02d}:{minutes:02d}"
-
-
-def format_date(iso):
-    return date.fromisoformat(iso).strftime("%d/%m/%Y")
-
-
-def parse_prices(tokens):
-    """Prezzi in coda al comando: '6,50', '4 7', '- 5'."""
-
-    prices = []
-
-    while tokens and re.fullmatch(r"-|€?\d+(?:[.,]\d{1,2})?€?", tokens[-1]):
-
-        token = tokens.pop().strip("€")
-
-        if token == "-":
-            prices.insert(0, None)
-        else:
-            number = float(token.replace(",", "."))
-            prices.insert(0, int(number) if number.is_integer() else number)
-
-    return prices
-
-
-def format_price(value):
-    return "—" if value is None else f"€ {value:.2f}".replace(".", ",")
-
-
-# =========================================================
 # CONFERMA E PUBBLICAZIONE
 # =========================================================
 
-CONFIRM_BUTTONS = InlineKeyboardMarkup([[
-    InlineKeyboardButton("✅ Pubblica", callback_data="publish"),
-    InlineKeyboardButton("❌ Annulla", callback_data="discard"),
-]])
 
 
-async def propose(message, context, change, summary):
-    """Manda anteprima e riepilogo, e aspetta la conferma."""
+async def propose(update, context, change, summary, back=None):
+    """Anteprima + riepilogo, in attesa di conferma."""
 
-    context.user_data["pending"] = change
+    message = update.effective_message
+
+    change["back"] = back
+    context.user_data.pop("awaiting", None)
+
+    # Ogni anteprima ha il suo id: i pulsanti di una vecchia
+    # anteprima non possono pubblicare la modifica di un'altra
+    pending = context.user_data.setdefault("pending", {})
+    context.user_data["next_id"] = pid = context.user_data.get("next_id", 0) + 1
+    pending[str(pid)] = change
+
+    for old in sorted(pending, key=int)[:-5]:
+        del pending[old]
 
     waiting = await message.reply_text("⏳ Preparo l'anteprima…")
 
     try:
-        image = await in_repo(preview, change)
+        image = await in_repo(core.preview, change)
     except Exception as error:
         log.exception("Anteprima fallita")
-        context.user_data.pop("pending", None)
-        await waiting.edit_text(f"⚠️ Non riesco a preparare l'anteprima: {error}")
-        return
+        pending.pop(str(pid), None)
+        return await waiting.edit_text(f"⚠️ Non riesco a preparare l'anteprima: {error}")
 
     await waiting.delete()
 
     await message.reply_photo(
         photo=image,
         caption=f"{summary}\n\nPubblico sul sito?",
-        reply_markup=CONFIRM_BUTTONS,
+        reply_markup=keyboard([("✅ Pubblica", f"publish:{pid}"), ("❌ Annulla", f"discard:{pid}")]),
         parse_mode="HTML",
     )
 
 
-async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, action, pid):
 
     query = update.callback_query
 
-    if query.from_user.id not in ALLOWED:
-        return await query.answer()
-
-    await query.answer()
-
-    change = context.user_data.pop("pending", None)
-
     await query.edit_message_reply_markup(reply_markup=None)
 
-    if query.data == "discard" or change is None:
+    change = context.user_data.get("pending", {}).pop(pid, None)
+
+    if action == "discard" or change is None:
         text = "Annullato, non ho pubblicato nulla." if change else "Questa anteprima è scaduta."
         return await query.message.reply_text(text)
 
     status = await query.message.reply_text("⏳ Pubblico…")
 
     try:
-        commit, paths = await in_repo(publish, change)
+        commit, paths = await in_repo(core.publish, change)
     except Exception as error:
         log.exception("Pubblicazione fallita")
         return await status.edit_text(f"⚠️ Pubblicazione non riuscita: {error}")
 
+    back = change.get("back")
+
     await status.edit_text(
-        f"✅ Pubblicato (modifica {commit}).\n"
-        "Sul sito sarà visibile tra 1-2 minuti: ti avviso io."
+        "✅ Pubblicato. Sul sito sarà visibile tra 1-2 minuti: ti avviso io.",
+        reply_markup=keyboard([back]) if back else None,
     )
 
     watched = next(p for p in paths if p.endswith(".json"))
@@ -645,19 +237,6 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-def fetch_live(path):
-
-    for base in LIVE_URLS:
-        try:
-            stamp = datetime.now().timestamp()
-            with urlopen(f"{base}/{path}?t={stamp}", timeout=15) as response:
-                return json.loads(response.read())
-        except (ssl.SSLError, OSError, ValueError):
-            continue
-
-    return None
-
-
 async def wait_until_live(context, chat_id, path, expected):
     """Controlla il sito finché il file pubblicato non è aggiornato."""
 
@@ -665,9 +244,10 @@ async def wait_until_live(context, chat_id, path, expected):
 
         await asyncio.sleep(10)
 
-        if await asyncio.to_thread(fetch_live, path) == expected:
+        if await asyncio.to_thread(core.fetch_live, path) == expected:
             return await context.bot.send_message(
-                chat_id, "🌐 È online: https://memphisristopub.it"
+                chat_id, f"🌐 È online: {SITE_URL}",
+                disable_web_page_preview=True,
             )
 
     await context.bot.send_message(
@@ -678,10 +258,232 @@ async def wait_until_live(context, chat_id, path, expected):
 
 
 # =========================================================
-# LOCANDINE: conversazione guidata
+# DOMANDE (risposta scritta o pulsante rapido)
 # =========================================================
 
-TYPE, TITLE, DATE, TIME, UNTIL = range(5)
+async def ask(update, context, step, ctx, prompt, quick=()):
+    """
+    Fa una domanda e aspetta la risposta. Si può scrivere
+    oppure usare i pulsanti rapidi (quick: righe di (testo, valore)).
+    """
+
+    context.user_data["awaiting"] = {"step": step, "ctx": ctx}
+
+    rows = [[(label, f"q:{value}") for label, value in row] for row in quick]
+
+    await update.effective_message.reply_text(
+        prompt,
+        reply_markup=keyboard(*rows, [CANCEL]),
+        parse_mode="HTML",
+    )
+
+
+async def ask_title(update, context, ctx, current=None):
+
+    prompt = "Scrivi il <b>titolo</b> (es. Halloween, Serata Ribs…)"
+
+    if current:
+        prompt += f"\nAttuale: «{esc(current)}»"
+
+    await ask(update, context, "title", ctx, prompt)
+
+
+async def ask_date(update, context, ctx):
+
+    start = today()
+    days = [start, start + timedelta(days=1)]
+
+    # Prossimi venerdì, sabato e domenica
+    for offset in range(2, 9):
+        day = start + timedelta(days=offset)
+        if day.weekday() >= 4 and len(days) < 6:
+            days.append(day)
+
+    labels = ["Oggi", "Domani"] + [short_date(d) for d in days[2:]]
+
+    quick = pairs([(label, day.isoformat()) for label, day in zip(labels, days)])
+
+    await ask(update, context, "date", ctx,
+              "📅 <b>Data</b>? Scegli o scrivi (es. 31/10)", quick)
+
+
+async def ask_time(update, context, ctx):
+
+    quick = [
+        [("19:00", "19:00"), ("19:30", "19:30"), ("20:00", "20:00")],
+        [("20:30", "20:30"), ("21:00", "21:00"), ("22:00", "22:00")],
+        [("Nessun orario", "none")],
+    ]
+
+    await ask(update, context, "time", ctx,
+              "🕑 <b>Ora di inizio</b>? Scegli o scrivi (es. 19:30)", quick)
+
+
+async def ask_until(update, context, ctx):
+
+    start = today()
+    month_end = start.replace(day=calendar.monthrange(start.year, start.month)[1])
+
+    quick = [
+        [("Nessuna scadenza", "none")],
+        [("Tra 1 settimana", (start + timedelta(days=7)).isoformat()),
+         (f"Fine mese ({month_end:%d/%m})", month_end.isoformat())],
+    ]
+
+    await ask(update, context, "until", ctx,
+              "⏳ <b>Fino a quando</b> resta visibile? Scegli o scrivi una data", quick)
+
+
+def read_choice(step, raw, typed):
+    """Converte la risposta in valore. Restituisce (valore, errore)."""
+
+    text = raw.strip()
+    empty = normalize(text) in ("no", "nessuna", "nessuno", "-", "none")
+
+    if step in ("date", "until"):
+
+        if step == "until" and empty:
+            return "", None
+
+        day = parse_date(text) if typed else date.fromisoformat(text)
+
+        if not day:
+            return None, "Non ho capito la data. Scrivila così: 31/10"
+
+        if day < today():
+            return None, "Questa data è già passata."
+
+        return day.isoformat(), None
+
+    if step == "time":
+
+        if empty:
+            return "", None
+
+        time = parse_time(text)
+
+        return (time, None) if time else (None, "Non ho capito l'ora. Scrivila così: 19:30")
+
+    if step in ("title", "name", "add_name"):
+
+        if not text:
+            return None, "Il testo è vuoto."
+
+        return text[:60], None
+
+    if step in ("desc", "add_desc"):
+        return (None if empty else text[:200]), None
+
+    if step == "notice":
+        return (text[:200], None) if text else (None, "Il testo è vuoto.")
+
+    return text, None
+
+
+async def handle_answer(update, context, raw, typed):
+
+    awaiting = context.user_data.get("awaiting")
+
+    if not awaiting:
+        return await update.effective_message.reply_text(
+            "Questa domanda è scaduta. Ricomincia dai pulsanti qui sotto 👇",
+            reply_markup=MAIN_KEYBOARD,
+        )
+
+    step, ctx = awaiting["step"], awaiting["ctx"]
+
+    # Prezzi: gestione a parte (uno o più numeri)
+    if step in ("price", "add_price"):
+        return await handle_price(update, context, step, ctx, raw)
+
+    value, error = read_choice(step, raw, typed)
+
+    if error:
+        return await update.effective_message.reply_text(
+            f"{error} Riprova, oppure premi ✖️ Annulla."
+        )
+
+    mode = ctx.get("mode")
+
+    # --- Nuova locandina ---
+    if mode == "draft":
+
+        draft = context.user_data.get("draft")
+
+        if not draft:
+            return await update.effective_message.reply_text("Locandina scaduta, rimandala.")
+
+        draft[step] = value
+
+        if step == "title":
+            if draft["kind"] == "event":
+                return await ask_date(update, context, ctx)
+            return await ask_until(update, context, ctx)
+
+        if step == "date":
+            return await ask_time(update, context, ctx)
+
+        return await finish_draft(update, context)
+
+    # --- Modifica evento / promozione ---
+    if mode == "entry":
+        return await propose_entry_edit(update, context, ctx["image"], step, value)
+
+    # --- Menu ---
+    if mode == "item":
+        return await propose_item_text(update, context, ctx, step, value)
+
+    if mode == "add":
+
+        ctx["item"]["name" if step == "add_name" else "description"] = value
+
+        if step == "add_name":
+            if value in {i["name"] for i in get_items(ctx["category"])}:
+                return await update.effective_message.reply_text(
+                    f"«{value}» esiste già in questa categoria. Scrivi un altro nome:"
+                )
+            return await ask(
+                update, context, "add_desc", ctx,
+                "📝 <b>Descrizione</b>? (es. ingredienti) Scrivila oppure:",
+                [[("Nessuna descrizione", "none")]],
+            )
+
+        if value is None:
+            ctx["item"].pop("description")
+
+        return await ask_price(update, context, "add_price", ctx)
+
+    # --- Avviso ---
+    if mode == "notice":
+        return await propose(
+            update, context,
+            {"kind": "notice", "text": value},
+            f"📢 Avviso in fondo al sito:\n«{esc(value)}»",
+        )
+
+
+async def on_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    context.user_data.pop("awaiting", None)
+    context.user_data.pop("draft", None)
+
+    await respond(update, "Ok, annullato.")
+
+
+# =========================================================
+# NUOVA LOCANDINA
+# =========================================================
+
+async def poster_prompt(update, context):
+
+    context.user_data.pop("awaiting", None)
+
+    await respond(
+        update,
+        "📷 Mandami la locandina.\n\n"
+        "💡 Per la qualità migliore mandala come <b>file</b> "
+        "(📎 → File), non come foto.",
+    )
 
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -701,172 +503,41 @@ async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await file.download_to_drive(upload)
 
-    draft = {"upload": str(upload)}
-    context.user_data["draft"] = draft
-
-    if message.photo:
-        await message.reply_text(
-            "💡 Per una qualità migliore, la prossima volta mandala come file "
-            "(📎 → File) invece che come foto."
-        )
+    context.user_data.pop("awaiting", None)
+    context.user_data["draft"] = draft = {"upload": str(upload)}
 
     caption = (message.caption or "").strip()
 
     if caption:
-        quick = parse_caption(caption)
-
+        quick = core.parse_caption(caption)
         if quick:
             draft.update(quick)
-            return await finish_draft(message, context)
+            return await finish_draft(update, context)
 
     await message.reply_text(
-        "È un evento o una promozione?",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("📅 Evento", callback_data="type:event"),
-            InlineKeyboardButton("🏷️ Promozione", callback_data="type:promo"),
-        ]]),
+        "Ricevuta! È un evento o una promozione?",
+        reply_markup=keyboard(
+            [("📅 Evento", "type:event"), ("🏷️ Promozione", "type:promo")],
+            [CANCEL],
+        ),
     )
 
-    return TYPE
+
+async def on_type(update, context, kind):
+
+    draft = context.user_data.get("draft")
+
+    if not draft:
+        return await respond(update, "Locandina scaduta, rimandala.")
+
+    draft["kind"] = kind
+
+    await respond(update, "📅 Evento" if kind == "event" else "🏷️ Promozione")
+
+    await ask_title(update, context, {"mode": "draft"})
 
 
-def parse_caption(caption):
-    """
-    'promo Ribs [fino 30/11]'  -> promozione
-    'Halloween 31/10 [19:30]'  -> evento
-    """
-
-    promo = re.fullmatch(
-        r"promo(?:zione)?\s+(.+?)(?:\s+fino(?:\s+al)?\s+(\S+))?",
-        caption,
-        re.IGNORECASE,
-    )
-
-    if promo:
-
-        until = ""
-
-        if promo.group(2):
-            parsed = parse_date(promo.group(2))
-            if not parsed:
-                return None
-            until = parsed.isoformat()
-
-        return {"kind": "promo", "title": promo.group(1).strip(), "until": until}
-
-    event = re.fullmatch(
-        r"(.+?)\s+(\d{1,2}[/.]\d{1,2}(?:[/.]\d{2,4})?)(?:\s+(?:ore\s+)?(\d{1,2}(?:[:.]\d{2})?))?",
-        caption,
-    )
-
-    if event:
-
-        when = parse_date(event.group(2))
-        time = parse_time(event.group(3)) if event.group(3) else ""
-
-        if not when or time is None:
-            return None
-
-        return {
-            "kind": "event",
-            "title": event.group(1).strip(),
-            "date": when.isoformat(),
-            "time": time,
-        }
-
-    return None
-
-
-async def on_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    kind = query.data.split(":")[1]
-
-    context.user_data["draft"]["kind"] = kind
-
-    await query.edit_message_text(
-        "📅 Evento" if kind == "event" else "🏷️ Promozione"
-    )
-
-    await query.message.reply_text("Titolo? (es. Halloween, Serata Ribs…)")
-
-    return TITLE
-
-
-async def on_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    draft = context.user_data["draft"]
-    draft["title"] = update.message.text.strip()
-
-    if draft["kind"] == "event":
-        await update.message.reply_text("Data? (es. 31/10, oppure oggi / domani)")
-        return DATE
-
-    await update.message.reply_text(
-        "Fino a quando resta visibile? Scrivi una data (es. 30/11) "
-        "oppure «no» se la togli tu a mano."
-    )
-
-    return UNTIL
-
-
-async def on_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    when = parse_date(update.message.text)
-
-    if not when:
-        await update.message.reply_text("Non ho capito la data. Scrivila così: 31/10")
-        return DATE
-
-    if when < today():
-        await update.message.reply_text("Questa data è già passata. Riprova:")
-        return DATE
-
-    context.user_data["draft"]["date"] = when.isoformat()
-
-    await update.message.reply_text("Ora di inizio? (es. 19:30, oppure «no»)")
-
-    return TIME
-
-
-async def on_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    text = update.message.text.strip()
-
-    time = "" if normalize(text) in ("no", "-", "nessuna") else parse_time(text)
-
-    if time is None:
-        await update.message.reply_text("Non ho capito l'ora. Scrivila così: 19:30")
-        return TIME
-
-    context.user_data["draft"]["time"] = time
-
-    return await finish_draft(update.message, context)
-
-
-async def on_until(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    text = update.message.text.strip()
-
-    if normalize(text) in ("no", "-", "nessuna"):
-        until = ""
-    else:
-        parsed = parse_date(text)
-
-        if not parsed:
-            await update.message.reply_text("Non ho capito. Scrivi una data (30/11) oppure «no»:")
-            return UNTIL
-
-        until = parsed.isoformat()
-
-    context.user_data["draft"]["until"] = until
-
-    return await finish_draft(update.message, context)
-
-
-async def finish_draft(message, context):
+async def finish_draft(update, context):
 
     draft = context.user_data.pop("draft")
 
@@ -885,105 +556,86 @@ async def finish_draft(message, context):
     if draft["kind"] == "event":
 
         summary = (
-            f"📅 <b>{html.escape(draft['title'])}</b>\n"
+            f"📅 <b>{esc(draft['title'])}</b>\n"
             f"{format_date(draft['date'])}"
             + (f" · {draft['time']}" if draft["time"] else "")
         )
 
         earlier = [
             e for e in read_json("events.json")
-            if e.get("type") != "promo" and e.get("date", "") >= today().isoformat()
-            and e["date"] < draft["date"]
+            if e.get("type") != "promo"
+            and today().isoformat() <= e.get("date", "") < draft["date"]
         ]
 
         if earlier:
             summary += (
                 f"\n\nℹ️ Sul sito si vede un evento alla volta: prima c'è "
-                f"«{html.escape(earlier[0]['title'])}», questo comparirà dopo."
+                f"«{esc(earlier[0]['title'])}», questo comparirà dopo."
             )
+
+        back = ("⬅️ Eventi", "list:events")
 
     else:
 
-        summary = f"🏷️ <b>{html.escape(draft['title'])}</b>\n" + (
+        summary = f"🏷️ <b>{esc(draft['title'])}</b>\n" + (
             f"visibile fino al {format_date(draft['until'])}"
             if draft["until"] else "visibile finché non la togli"
         )
 
-    await propose(message, context, draft, summary)
+        back = ("⬅️ Promozioni", "list:promos")
 
-    return ConversationHandler.END
-
-
-async def on_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    context.user_data.pop("draft", None)
-
-    await update.message.reply_text("Ok, lasciamo stare questa locandina.")
-
-    return ConversationHandler.END
+    await propose(update, context, draft, summary, back)
 
 
 # =========================================================
-# ELENCHI E RIMOZIONE
+# EVENTI E PROMOZIONI
 # =========================================================
 
-async def list_entries(update, context, promos):
+async def entries_screen(update, context, promos):
 
-    await in_repo(sync)
+    context.user_data.pop("awaiting", None)
+
+    await in_repo(core.sync)
 
     entries = [
         e for e in read_json("events.json")
         if (e.get("type") == "promo") == promos
     ]
 
-    if not promos:
-        entries.sort(key=lambda e: e["date"], reverse=True)
-
-    if not entries:
-        return await update.message.reply_text(
-            "Nessuna promozione attiva." if promos else "Nessun evento."
-        )
-
     buttons = []
 
-    for entry in entries[:20]:
+    if promos:
 
-        label = entry["title"]
+        for e in entries:
+            label = e["title"] + (f" · fino {e['until'][8:10]}/{e['until'][5:7]}" if e.get("until") else "")
+            buttons.append([(f"🏷️ {label}", f"en:{Path(e['image']).name}")])
 
-        if not promos:
-            label += f" · {format_date(entry['date'])}"
-        elif entry.get("until"):
-            label += f" · fino {format_date(entry['until'])}"
+        title = "🏷️ <b>Promozioni</b> sul sito"
+        add = ("➕ Nuova promozione", "newposter")
 
-        buttons.append([InlineKeyboardButton(
-            f"🗑 {label}",
-            callback_data=f"remove:{Path(entry['image']).name}",
-        )])
+    else:
 
-    await update.message.reply_text(
-        ("Promozioni" if promos else "Eventi") + " sul sito. Tocca per togliere:",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
+        now = today().isoformat()
+
+        upcoming = sorted((e for e in entries if e["date"] >= now), key=lambda e: e["date"])
+        past = sorted((e for e in entries if e["date"] < now), key=lambda e: e["date"], reverse=True)
+
+        for e in upcoming:
+            buttons.append([(f"📅 {e['title']} · {format_date(e['date'])[:5]}", f"en:{Path(e['image']).name}")])
+
+        for e in past[:5]:
+            buttons.append([(f"🕘 {e['title']} · {format_date(e['date'])[:5]}", f"en:{Path(e['image']).name}")])
+
+        title = "📅 <b>Eventi</b> (🕘 = già passati)"
+        add = ("➕ Nuovo evento", "newposter")
+
+    if not buttons:
+        title += "\n\nAl momento non ce ne sono."
+
+    await respond(update, f"{title}\nTocca per modificare o togliere.", keyboard(*buttons, [add]))
 
 
-async def cmd_events(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await list_entries(update, context, promos=False)
-
-
-async def cmd_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await list_entries(update, context, promos=True)
-
-
-async def on_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-
-    if query.from_user.id not in ALLOWED:
-        return await query.answer()
-
-    await query.answer()
-
-    name = query.data.split(":", 1)[1]
+async def entry_screen(update, context, name):
 
     entry = next(
         (e for e in read_json("events.json") if Path(e["image"]).name == name),
@@ -991,15 +643,91 @@ async def on_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not entry:
-        return await query.message.reply_text("Non lo trovo più, forse è già stato tolto.")
+        return await respond(update, "Non lo trovo più: forse è già stato tolto.")
 
-    change = {"kind": "remove", "image": entry["image"]}
+    promo = entry.get("type") == "promo"
 
-    context.user_data["pending"] = change
+    lines = [f"{'🏷️' if promo else '📅'} <b>{esc(entry['title'])}</b>"]
 
-    await query.message.reply_text(
-        f"Tolgo «{entry['title']}» dal sito?",
-        reply_markup=CONFIRM_BUTTONS,
+    if promo:
+        lines.append(
+            f"⏳ Fino al {format_date(entry['until'])}" if entry.get("until")
+            else "⏳ Nessuna scadenza"
+        )
+        rows = [
+            [("✏️ Titolo", f"ea:title:{name}"), ("⏳ Scadenza", f"ea:until:{name}")],
+            [("🗑 Togli dal sito", f"ea:remove:{name}")],
+            [("🖼 Vedi locandina", f"{SITE_URL}/{entry['image']}")],
+            [("⬅️ Promozioni", "list:promos")],
+        ]
+    else:
+        lines.append(f"📅 {format_date(entry['date'])}" + (f" · 🕑 {entry['time']}" if entry.get("time") else ""))
+        rows = [
+            [("✏️ Titolo", f"ea:title:{name}"), ("📅 Data", f"ea:date:{name}")],
+            [("🕑 Ora", f"ea:time:{name}"), ("🗑 Togli dal sito", f"ea:remove:{name}")],
+            [("🖼 Vedi locandina", f"{SITE_URL}/{entry['image']}")],
+            [("⬅️ Eventi", "list:events")],
+        ]
+
+    await respond(update, "\n".join(lines), keyboard(*rows))
+
+
+async def entry_action(update, context, action, name):
+
+    entry = next(
+        (e for e in read_json("events.json") if Path(e["image"]).name == name),
+        None,
+    )
+
+    if not entry:
+        return await respond(update, "Non lo trovo più: forse è già stato tolto.")
+
+    promo = entry.get("type") == "promo"
+    back = ("⬅️ Promozioni", "list:promos") if promo else ("⬅️ Eventi", "list:events")
+
+    if action == "remove":
+        return await propose(
+            update, context,
+            {"kind": "remove", "image": entry["image"]},
+            f"🗑 Tolgo «{esc(entry['title'])}» dal sito.",
+            back,
+        )
+
+    ctx = {"mode": "entry", "image": entry["image"]}
+
+    if action == "title":
+        return await ask_title(update, context, ctx, entry["title"])
+    if action == "date":
+        return await ask_date(update, context, ctx)
+    if action == "time":
+        return await ask_time(update, context, ctx)
+    if action == "until":
+        return await ask_until(update, context, ctx)
+
+
+async def propose_entry_edit(update, context, image, field, value):
+
+    entry = core.get_entry(image)
+
+    if not entry:
+        return await update.effective_message.reply_text("Non lo trovo più: forse è già stato tolto.")
+
+    promo = entry.get("type") == "promo"
+
+    if field == "title":
+        label = f"✏️ Titolo: «{esc(value)}»"
+    elif field == "date":
+        label = f"📅 Data: {format_date(value)}"
+    elif field == "time":
+        label = f"🕑 Ora: {value or 'nessun orario'}"
+    else:
+        label = f"⏳ Fino al {format_date(value)}" if value else "⏳ Nessuna scadenza"
+
+    await propose(
+        update, context,
+        {"kind": "entry_edit", "image": image, "set": {field: value}},
+        f"<b>{esc(entry['title'])}</b>\n{label}",
+        ("⬅️ Promozioni", "list:promos") if promo else ("⬅️ Eventi", "list:events"),
     )
 
 
@@ -1007,260 +735,570 @@ async def on_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MENU
 # =========================================================
 
-def menu_items():
-
-    for section in read_json("menu.json")["sections"]:
-        for category in section["categories"]:
-            for item in category["items"]:
-                yield category, item
+def get_items(category_id):
+    return next(c for c in core.categories() if c["id"] == category_id)["items"]
 
 
-def search_items(query):
+def item_label(item):
 
-    query = normalize(query)
+    flags = ("🙈 " if item.get("available") is False else "") + ("⭐ " if item.get("featured") else "")
 
-    items = list(menu_items())
+    label = f"{flags}{item['name']} · {item_price(item)}"
 
-    exact = [(c, i) for c, i in items if normalize(i["name"]) == query]
-    if exact:
-        return exact
-
-    contained = [(c, i) for c, i in items if query in normalize(i["name"])]
-    if contained:
-        return contained
-
-    names = [normalize(i["name"]) for _, i in items]
-    close = difflib.get_close_matches(query, names, n=4, cutoff=0.6)
-
-    return [(c, i) for c, i in items if normalize(i["name"]) in close]
+    return label if len(label) <= 60 else label[:57] + "…"
 
 
-async def menu_command(update, context, action):
+async def menu_screen(update, context):
 
-    tokens = context.args[:]
+    context.user_data.pop("awaiting", None)
 
-    prices = parse_prices(tokens) if action == "price" else []
+    await in_repo(core.sync)
 
-    query = " ".join(tokens)
+    buttons = [
+        (f"{c['title']} ({len(c['items'])})", f"cat:{c['id']}")
+        for c in core.categories()
+    ]
 
-    if not query or (action == "price" and not prices):
-        examples = {
-            "price": "/prezzo spritz 6,50",
-            "hide": "/nascondi picanha",
-            "show": "/mostra picanha",
-        }
-        return await update.message.reply_text(f"Esempio: {examples[action]}")
-
-    await in_repo(sync)
-
-    matches = search_items(query)
-
-    if not matches:
-        return await update.message.reply_text(
-            f"Non trovo «{query}» nel menu. Controlla come è scritto su /menu."
-        )
-
-    if len(matches) > 1:
-
-        context.user_data["menu_action"] = (action, prices)
-
-        buttons = [
-            [InlineKeyboardButton(
-                item["name"],
-                callback_data=f"pick:{category['id']}:{index}",
-            )]
-            for index, (category, item) in enumerate(matches[:6])
-        ]
-
-        context.user_data["menu_matches"] = [
-            (c["id"], i["name"]) for c, i in matches[:6]
-        ]
-
-        return await update.message.reply_text(
-            "Quale intendi?",
-            reply_markup=InlineKeyboardMarkup(buttons),
-        )
-
-    category, item = matches[0]
-
-    await propose_menu_change(update.message, context, action, prices, category, item)
-
-
-async def on_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-
-    if query.from_user.id not in ALLOWED:
-        return await query.answer()
-
-    await query.answer()
-
-    index = int(query.data.split(":")[2])
-
-    action, prices = context.user_data.pop("menu_action", (None, None))
-    matches = context.user_data.pop("menu_matches", [])
-
-    if action is None or index >= len(matches):
-        return await query.message.reply_text("Scelta scaduta, ripeti il comando.")
-
-    category_id, name = matches[index]
-
-    category, item = next(
-        (c, i) for c, i in menu_items()
-        if c["id"] == category_id and i["name"] == name
+    await respond(
+        update,
+        "🍔 <b>Menu</b>\nScegli una categoria:",
+        keyboard(*pairs(buttons), [("📖 Vedi il menu sul sito", f"{SITE_URL}/menu.html")]),
     )
 
-    await query.edit_message_reply_markup(reply_markup=None)
 
-    await propose_menu_change(query.message, context, action, prices, category, item)
+async def category_screen(update, context, category_id):
+
+    context.user_data.pop("awaiting", None)
+
+    category = next((c for c in core.categories() if c["id"] == category_id), None)
+
+    if not category:
+        return await menu_screen(update, context)
+
+    rows = [
+        [(item_label(item), f"it:{category_id}:{index}")]
+        for index, item in enumerate(category["items"])
+    ]
+
+    await respond(
+        update,
+        f"🍔 <b>{esc(category['title'])}</b>\n"
+        "Tocca una voce per modificarla.\n⭐ = in homepage · 🙈 = nascosta",
+        keyboard(
+            *rows,
+            [("➕ Aggiungi voce", f"add:{category_id}")],
+            [("⬅️ Categorie", "menu")],
+        ),
+    )
 
 
-async def propose_menu_change(message, context, action, prices, category, item):
+def load_item(category_id, index):
+
+    category = next((c for c in core.categories() if c["id"] == category_id), None)
+
+    if not category or index >= len(category["items"]):
+        return None, None
+
+    return category, category["items"][index]
+
+
+async def item_screen(update, context, category_id, index):
+
+    context.user_data.pop("awaiting", None)
+
+    category, item = load_item(category_id, index)
+
+    if not item:
+        return await category_screen(update, context, category_id)
+
+    if "prices" in item:
+        price = " · ".join(
+            f"{label} {format_price(p)}"
+            for label, p in zip(category.get("columns", []), item["prices"])
+        )
+    else:
+        price = format_price(item.get("price"))
+
+    hidden = item.get("available") is False
+    featured = bool(item.get("featured"))
+
+    text = "\n".join([
+        f"<b>{esc(item['name'])}</b>",
+        f"<i>{esc(category['title'])}</i>",
+        "",
+        f"💶 {price}",
+        f"📝 {esc(item.get('description') or 'nessuna descrizione')}",
+        f"⭐ In homepage: {'sì' if featured else 'no'}",
+        "🙈 Nascosta dal menu" if hidden else "👀 Visibile nel menu",
+    ])
+
+    ref = f"{category_id}:{index}"
+
+    await respond(update, text, keyboard(
+        [("💶 Prezzo", f"ia:price:{ref}"), ("✏️ Nome", f"ia:name:{ref}")],
+        [("📝 Descrizione", f"ia:desc:{ref}"),
+         ("⭐ Togli da homepage" if featured else "⭐ Metti in homepage", f"ia:feat:{ref}")],
+        [("👀 Mostra" if hidden else "🙈 Nascondi", f"ia:vis:{ref}"), ("🗑 Elimina", f"ia:del:{ref}")],
+        [(f"⬅️ {category['title']}", f"cat:{category_id}")],
+    ))
+
+
+async def item_action(update, context, action, category_id, index):
+
+    category, item = load_item(category_id, index)
+
+    if not item:
+        return await category_screen(update, context, category_id)
 
     name = item["name"]
-    label = html.escape(name)
+    back = (f"⬅️ {category['title']}", f"cat:{category_id}")
+    ctx = {"mode": "item", "category": category_id, "name": name,
+           "columns": category.get("columns")}
 
-    change = {"kind": "menu", "category": category["id"], "name": name}
+    if action == "price":
+        return await ask_price(update, context, "price", ctx, item)
 
-    if action == "hide":
-        change["set"] = {"available": False}
-        change["summary"] = f"nascosto {name}"
-        summary = f"🙈 Nascondo <b>{label}</b> dal menu."
+    if action == "name":
+        return await ask(update, context, "name", ctx,
+                         f"✏️ Nuovo <b>nome</b> per «{esc(name)}»:")
 
-    elif action == "show":
-        change["set"] = {"available": None}
-        change["summary"] = f"di nuovo visibile {name}"
-        summary = f"👀 Rimetto <b>{label}</b> nel menu."
+    if action == "desc":
+        return await ask(
+            update, context, "desc", ctx,
+            f"📝 Nuova <b>descrizione</b> per «{esc(name)}»"
+            f"\nAttuale: {esc(item.get('description') or 'nessuna')}",
+            [[("Nessuna descrizione", "none")]],
+        )
 
+    if action == "feat":
+
+        if item.get("featured"):
+            return await propose_menu_set(
+                update, context, category_id, name, {"featured": None},
+                f"tolto {name} dalla homepage",
+                f"⭐ Tolgo <b>{esc(name)}</b> dalla homepage.", back,
+            )
+
+        # In homepage le due colonne (Cucina, Bevande) stanno meglio pari
+        menu = read_json("menu.json")
+        counts = [
+            sum(1 for c in s["categories"] for i in c["items"] if i.get("featured"))
+            for s in menu["sections"]
+        ]
+
+        note = f"\n\nℹ️ In homepage ora: Cucina {counts[0]}, Bevande {counts[1]}. Tienile pari per l'allineamento."
+
+        return await propose_menu_set(
+            update, context, category_id, name, {"featured": True},
+            f"{name} in homepage",
+            f"⭐ Metto <b>{esc(name)}</b> in homepage.{note}", back,
+        )
+
+    if action == "vis":
+
+        if item.get("available") is False:
+            return await propose_menu_set(
+                update, context, category_id, name, {"available": None},
+                f"di nuovo visibile {name}",
+                f"👀 Rimetto <b>{esc(name)}</b> nel menu.", back,
+            )
+
+        return await propose_menu_set(
+            update, context, category_id, name, {"available": False},
+            f"nascosto {name}",
+            f"🙈 Nascondo <b>{esc(name)}</b> dal menu (resta salvata, la rimetti quando vuoi).", back,
+        )
+
+    if action == "del":
+        return await propose(
+            update, context,
+            {"kind": "menu_delete", "category": category_id, "name": name},
+            f"🗑 Elimino <b>{esc(name)}</b> dal menu.\n"
+            "Se è solo finita per un po', meglio 🙈 Nascondi.",
+            back,
+        )
+
+
+async def ask_price(update, context, step, ctx, item=None):
+
+    columns = ctx.get("columns")
+
+    if columns:
+        example = " ".join(["4"] * len(columns))
+        prompt = (
+            f"💶 Scrivi i <b>{len(columns)} prezzi</b> ({' e '.join(columns)}), "
+            f"separati da spazio. Es: <code>{example}</code>\n"
+            "Usa <code>-</code> se una misura non c'è."
+        )
     else:
-        columns = category.get("columns")
+        prompt = "💶 Scrivi il <b>prezzo</b>. Es: <code>6,50</code>"
 
-        if columns:
+    if item:
+        prompt = f"<b>{esc(item['name'])}</b> · attuale {item_price(item)}\n\n" + prompt
 
-            if len(prices) != len(columns):
-                return await message.reply_text(
-                    f"Per {name} servono {len(columns)} prezzi "
-                    f"({' e '.join(columns)}). Usa «-» se non c'è, es.:\n"
-                    f"/prezzo {name.lower()} 4 7"
-                )
-
-            old = " / ".join(format_price(p) for p in item.get("prices", []))
-            new = " / ".join(format_price(p) for p in prices)
-
-            change["set"] = {"prices": prices}
-
-        else:
-
-            if len(prices) != 1:
-                return await message.reply_text(f"Per {name} serve un solo prezzo.")
-
-            old = format_price(item.get("price"))
-            new = format_price(prices[0])
-
-            change["set"] = {"price": prices[0]}
-
-        change["summary"] = f"{name} {new}"
-        summary = f"💶 <b>{label}</b>\n{old} → <b>{new}</b>"
-
-    await propose(message, context, change, summary)
+    await ask(update, context, step, ctx, prompt)
 
 
-async def cmd_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await menu_command(update, context, "price")
+async def handle_price(update, context, step, ctx, raw):
+
+    tokens = raw.replace("€", " ").split()
+    prices = core.parse_prices(tokens)
+
+    columns = ctx.get("columns")
+    expected = len(columns) if columns else 1
+
+    if tokens or len(prices) != expected:
+        problem = f"Mi servono {expected} prezzi." if expected > 1 else "Non ho capito il prezzo."
+        return await update.effective_message.reply_text(
+            f"{problem} Riprova (es. 6,50), oppure premi ✖️ Annulla."
+        )
+
+    value = {"prices": prices} if columns else {"price": prices[0]}
+    shown = " / ".join(format_price(p) for p in prices)
+
+    if step == "add_price":
+
+        item = {"name": ctx["item"]["name"]}
+        if ctx["item"].get("description"):
+            item["description"] = ctx["item"]["description"]
+        item.update(value)
+
+        category = next(c for c in core.categories() if c["id"] == ctx["category"])
+
+        return await propose(
+            update, context,
+            {"kind": "menu_add", "category": ctx["category"], "item": item},
+            f"➕ Aggiungo a <b>{esc(category['title'])}</b>:\n"
+            f"<b>{esc(item['name'])}</b> · {shown}"
+            + (f"\n{esc(item['description'])}" if item.get("description") else ""),
+            (f"⬅️ {category['title']}", f"cat:{ctx['category']}"),
+        )
+
+    await propose_menu_set(
+        update, context, ctx["category"], ctx["name"], value,
+        f"{ctx['name']} {shown}",
+        f"💶 <b>{esc(ctx['name'])}</b> → <b>{shown}</b>",
+        ("⬅️ Torna al menu", f"cat:{ctx['category']}"),
+    )
 
 
-async def cmd_hide(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await menu_command(update, context, "hide")
+async def propose_item_text(update, context, ctx, step, value):
+
+    name = ctx["name"]
+    back = ("⬅️ Torna al menu", f"cat:{ctx['category']}")
+
+    if step == "name":
+
+        if value in {i["name"] for i in get_items(ctx["category"])}:
+            return await update.effective_message.reply_text(
+                f"«{value}» esiste già in questa categoria. Scrivi un altro nome:"
+            )
+
+        return await propose_menu_set(
+            update, context, ctx["category"], name, {"name": value},
+            f"{name} rinominato {value}",
+            f"✏️ «{esc(name)}» diventa <b>{esc(value)}</b>", back,
+        )
+
+    if step == "desc":
+        return await propose_menu_set(
+            update, context, ctx["category"], name, {"description": value},
+            f"descrizione {name}",
+            f"📝 <b>{esc(name)}</b>\n{esc(value) if value else 'senza descrizione'}", back,
+        )
 
 
-async def cmd_show(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await menu_command(update, context, "show")
+async def propose_menu_set(update, context, category_id, name, values, commit, summary, back):
+
+    await propose(
+        update, context,
+        {"kind": "menu", "category": category_id, "name": name,
+         "set": values, "summary": commit},
+        summary,
+        back,
+    )
 
 
-async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📖 https://memphisristopub.it/menu.html")
+async def add_start(update, context, category_id):
+
+    category = next((c for c in core.categories() if c["id"] == category_id), None)
+
+    if not category:
+        return await menu_screen(update, context)
+
+    await ask(
+        update, context, "add_name",
+        {"mode": "add", "category": category_id, "columns": category.get("columns"), "item": {}},
+        f"➕ Nuova voce in <b>{esc(category['title'])}</b>\n\nScrivi il <b>nome</b>:",
+    )
 
 
 # =========================================================
 # AVVISO
 # =========================================================
 
-async def cmd_notice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def notice_screen(update, context):
+
+    context.user_data.pop("awaiting", None)
+
+    await in_repo(core.sync)
+
+    current = read_json("notice.json").get("text", "")
+
+    if current:
+        text = f"📢 <b>Avviso sul sito</b>\n«{esc(current)}»"
+        rows = [[("✏️ Cambia testo", "notice:edit"), ("🗑 Togli avviso", "notice:off")]]
+    else:
+        text = (
+            "📢 <b>Avviso</b>\nNessun avviso sul sito.\n\n"
+            "Serve per comunicazioni veloci, es. «Chiuso per ferie dal 10 al 20 agosto»."
+        )
+        rows = [[("✏️ Scrivi un avviso", "notice:edit")]]
+
+    await respond(update, text, keyboard(*rows))
+
+
+async def notice_action(update, context, action):
+
+    if action == "off":
+        return await propose(
+            update, context, {"kind": "notice", "text": ""},
+            "📢 Tolgo l'avviso dal sito.",
+        )
+
+    await ask(
+        update, context, "notice", {"mode": "notice"},
+        "📢 Scrivi il <b>testo dell'avviso</b>.\n"
+        "Es: <i>Chiuso per ferie dal 10 al 20 agosto, ci vediamo il 21!</i>",
+    )
+
+
+# =========================================================
+# ALTRO: annulla, ultime modifiche, guida
+# =========================================================
+
+HELP = """\
+<b>Come si usa</b>
+
+Usa i pulsanti in basso 👇
+
+📷 <b>Nuova locandina</b> — manda la foto (meglio come file 📎) e rispondi alle domande. Prima di pubblicare vedi l'anteprima.
+📅 <b>Eventi</b> · 🏷️ <b>Promozioni</b> — modifica titolo, data, ora, scadenza, oppure togli.
+🍔 <b>Menu</b> — categoria → voce → prezzo, nome, descrizione, homepage, nascondi, elimina. ➕ per aggiungere.
+📢 <b>Avviso</b> — barra in fondo al sito per comunicazioni veloci.
+⚙️ <b>Altro</b> — annulla l'ultima modifica, storico.
+
+Niente viene pubblicato senza il tuo ✅.
+
+<b>Scorciatoie</b> per chi va di fretta:
+• didascalia della foto: <code>Halloween 31/10 19:30</code> o <code>promo Ribs fino 30/11</code>
+• <code>/prezzo spritz 6,50</code> · <code>/nascondi picanha</code> · <code>/mostra picanha</code>
+• <code>/avviso testo</code> · /stop interrompe una domanda"""
+
+
+async def more_screen(update, context):
+
+    context.user_data.pop("awaiting", None)
+
+    await respond(update, "⚙️ <b>Altro</b>", keyboard(
+        [("↩️ Annulla l'ultima modifica", "more:undo")],
+        [("🕑 Ultime modifiche", "more:log")],
+        [("❓ Come si usa", "more:help")],
+    ))
+
+
+async def more_action(update, context, action):
+
+    if action == "help":
+        return await respond(update, HELP, keyboard([("⬅️ Altro", "more")]))
+
+    if action == "log":
+        lines = await in_repo(core.recent_changes)
+        return await respond(
+            update, f"🕑 <b>Ultime modifiche al sito</b>\n\n{esc(lines)}",
+            keyboard([("⬅️ Altro", "more")]),
+        )
+
+    if action == "undo":
+
+        last = await in_repo(core.last_bot_commit)
+
+        if not last:
+            return await respond(
+                update,
+                "L'ultima modifica al sito non è stata fatta dal bot: "
+                "non la annullo da qui. Chiedi a Denis.",
+                keyboard([("⬅️ Altro", "more")]),
+            )
+
+        return await respond(
+            update,
+            f"↩️ Annullo l'ultima modifica?\n«{esc(last[0])}»",
+            keyboard([("Sì, annulla", "undo:yes"), ("No", "more")]),
+        )
+
+
+async def undo_confirmed(update, context):
+
+    await respond(update, "⏳ Annullo…")
+
+    try:
+        await in_repo(core.revert_last)
+    except Exception as error:
+        log.exception("Annulla fallito")
+        return await respond(update, f"⚠️ Non riuscito: {error}")
+
+    await respond(update, "↩️ Annullato. Il sito torna com'era tra 1-2 minuti.")
+
+
+# =========================================================
+# SCORCIATOIE SCRITTE
+# =========================================================
+
+def search_items(query):
+
+    query = normalize(query)
+
+    items = [(c, i) for c in core.categories() for i in c["items"]]
+
+    for test in (
+        lambda i: normalize(i["name"]) == query,
+        lambda i: query in normalize(i["name"]),
+    ):
+        found = [(c, i) for c, i in items if test(i)]
+        if found:
+            return found
+
+    close = set(difflib.get_close_matches(query, [normalize(i["name"]) for _, i in items], n=4, cutoff=0.6))
+
+    return [(c, i) for c, i in items if normalize(i["name"]) in close]
+
+
+async def shortcut(update, context, action):
+
+    tokens = context.args[:]
+    prices = parse_prices(tokens) if action == "price" else []
+    query = " ".join(tokens)
+
+    if not query or (action == "price" and not prices):
+        examples = {"price": "/prezzo spritz 6,50", "vis": "/nascondi picanha", "show": "/mostra picanha"}
+        return await update.message.reply_text(f"Esempio: {examples[action]}")
+
+    await in_repo(core.sync)
+
+    matches = search_items(query)
+
+    if not matches:
+        return await update.message.reply_text(f"Non trovo «{query}» nel menu. Prova da 🍔 Menu.")
+
+    if len(matches) > 1:
+        rows = [
+            [(i["name"], f"it:{c['id']}:{c['items'].index(i)}")]
+            for c, i in matches[:6]
+        ]
+        return await update.message.reply_text("Quale intendi?", reply_markup=keyboard(*rows))
+
+    category, item = matches[0]
+    index = category["items"].index(item)
+
+    if action == "price":
+        context.user_data["awaiting"] = {
+            "step": "price",
+            "ctx": {"mode": "item", "category": category["id"], "name": item["name"],
+                    "columns": category.get("columns")},
+        }
+        return await handle_price(
+            update, context, "price", context.user_data["awaiting"]["ctx"],
+            " ".join(str(p) if p is not None else "-" for p in prices),
+        )
+
+    hidden = item.get("available") is False
+
+    if (action == "show") != hidden:
+        state = "già nascosta" if hidden else "già visibile"
+        return await update.message.reply_text(f"{item['name']} è {state}.")
+
+    await item_action(update, context, "vis", category["id"], index)
+
+
+async def cmd_price(update, context):
+    await shortcut(update, context, "price")
+
+
+async def cmd_hide(update, context):
+    await shortcut(update, context, "vis")
+
+
+async def cmd_show(update, context):
+    await shortcut(update, context, "show")
+
+
+async def cmd_notice(update, context):
 
     text = " ".join(context.args).strip()
 
     if not text:
-
-        await in_repo(sync)
-
-        current = read_json("notice.json").get("text", "")
-
-        return await update.message.reply_text(
-            f"Avviso attuale: «{current}»\nPer toglierlo: /avviso off"
-            if current else
-            "Nessun avviso. Esempio:\n/avviso Chiuso per ferie dal 10 al 20 agosto"
-        )
+        return await notice_screen(update, context)
 
     if normalize(text) in ("off", "no", "togli"):
-        return await propose(
-            update.message, context,
-            {"kind": "notice", "text": ""},
-            "📢 Tolgo l'avviso dal sito.",
-        )
+        return await notice_action(update, context, "off")
 
-    await propose(
-        update.message, context,
-        {"kind": "notice", "text": text},
-        f"📢 Avviso in fondo al sito:\n«{html.escape(text)}»",
-    )
+    context.user_data["awaiting"] = {"step": "notice", "ctx": {"mode": "notice"}}
+
+    await handle_answer(update, context, text, typed=True)
 
 
 # =========================================================
-# ANNULLA E STATO
+# SMISTAMENTO
 # =========================================================
 
-def last_bot_commit():
+async def cmd_start(update, context):
 
-    sync()
-
-    author, subject, commit = git("log", "-1", "--format=%an%x09%s%x09%h").split("\t")
-
-    return (subject, commit) if author == "Bot Memphis" else None
-
-
-def revert_last():
-
-    sync()
-
-    subject = git("log", "-1", "--format=%s")
-
-    git("revert", "--no-edit", "HEAD")
-    git("commit", "--quiet", "--amend", "-m", f"Annullato: {subject}")
-    git("push", "--quiet", "origin", "main")
-
-    return git("rev-parse", "--short", "HEAD")
-
-
-async def cmd_undo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    last = await in_repo(last_bot_commit)
-
-    if not last:
-        return await update.message.reply_text(
-            "L'ultima modifica al sito non è del bot: non la annullo da qui. "
-            "Chiedi a Denis."
-        )
+    context.user_data.clear()
 
     await update.message.reply_text(
-        f"Annullo l'ultima modifica?\n«{last[0]}» ({last[1]})",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("↩️ Sì, annulla", callback_data="undo:yes"),
-            InlineKeyboardButton("No", callback_data="undo:no"),
-        ]]),
+        "👋 Ciao! Da qui aggiorni il sito del MEMPHIS①.\n"
+        "Usa i pulsanti qui sotto 👇",
+        reply_markup=MAIN_KEYBOARD,
     )
 
 
-async def on_undo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_help(update, context):
+    await update.message.reply_text(HELP, parse_mode="HTML", reply_markup=MAIN_KEYBOARD)
+
+
+async def cmd_stop(update, context):
+    await on_cancel(update, context)
+
+
+MAIN_ACTIONS = {
+    B_POSTER: poster_prompt,
+    B_EVENTS: lambda u, c: entries_screen(u, c, promos=False),
+    B_PROMOS: lambda u, c: entries_screen(u, c, promos=True),
+    B_MENU: menu_screen,
+    B_NOTICE: notice_screen,
+    B_MORE: more_screen,
+}
+
+
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text
+
+    # I pulsanti fissi hanno la precedenza su una domanda lasciata a metà
+    if text in MAIN_ACTIONS:
+        context.user_data.pop("awaiting", None)
+        return await MAIN_ACTIONS[text](update, context)
+
+    if context.user_data.get("awaiting"):
+        return await handle_answer(update, context, text, typed=True)
+
+    await update.message.reply_text(
+        "Usa i pulsanti qui sotto 👇", reply_markup=MAIN_KEYBOARD,
+    )
+
+
+async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
 
@@ -1268,37 +1306,67 @@ async def on_undo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await query.answer()
 
     await query.answer()
-    await query.edit_message_reply_markup(reply_markup=None)
 
-    if query.data == "undo:no":
-        return await query.message.reply_text("Ok, lascio tutto com'è.")
+    data = query.data
+    head, _, rest = data.partition(":")
 
-    try:
-        commit = await in_repo(revert_last)
-    except Exception as error:
-        log.exception("Annulla fallito")
-        return await query.message.reply_text(f"⚠️ Non riuscito: {error}")
+    if head in ("publish", "discard"):
+        return await on_confirm(update, context, head, rest)
 
-    await query.message.reply_text(
-        f"↩️ Annullato ({commit}). Il sito torna com'era tra 1-2 minuti."
-    )
+    if data == "cancel":
+        return await on_cancel(update, context)
 
+    if head == "q":
+        # Risposta da pulsante rapido: tolgo i pulsanti dalla domanda
+        await query.edit_message_reply_markup(reply_markup=None)
+        return await handle_answer(update, context, rest, typed=False)
 
-async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if head == "type":
+        return await on_type(update, context, rest)
 
-    await in_repo(sync)
+    if data == "newposter":
+        return await poster_prompt(update, context)
 
-    lines = git("log", "-8", "--format=%cd · %an · %s", "--date=format:%d/%m %H:%M")
+    if head == "list":
+        return await entries_screen(update, context, promos=(rest == "promos"))
 
-    await update.message.reply_text(f"Ultime modifiche al sito:\n\n{lines}")
+    if head == "en":
+        return await entry_screen(update, context, rest)
 
+    if head == "ea":
+        action, name = rest.split(":", 1)
+        return await entry_action(update, context, action, name)
 
-async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(HELP, parse_mode="HTML")
+    if data == "menu":
+        return await menu_screen(update, context)
 
+    if head == "cat":
+        return await category_screen(update, context, rest)
 
-async def on_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Non ho capito. Scrivi /aiuto per vedere cosa posso fare.")
+    if head == "it":
+        category_id, index = rest.split(":")
+        return await item_screen(update, context, category_id, int(index))
+
+    if head == "ia":
+        action, category_id, index = rest.split(":")
+        return await item_action(update, context, action, category_id, int(index))
+
+    if head == "add":
+        return await add_start(update, context, rest)
+
+    if head == "notice":
+        return await notice_action(update, context, rest)
+
+    if data == "more":
+        return await more_screen(update, context)
+
+    if head == "more":
+        return await more_action(update, context, rest)
+
+    if data == "undo:yes":
+        return await undo_confirmed(update, context)
+
+    log.warning("Pulsante sconosciuto: %s", data)
 
 
 async def on_error(update, context: ContextTypes.DEFAULT_TYPE):
@@ -1312,58 +1380,57 @@ async def on_error(update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# =========================================================
-# AVVIO
-# =========================================================
+async def post_init(app: Application):
+
+    await app.bot.set_my_commands([
+        BotCommand("start", "Mostra i pulsanti"),
+        BotCommand("menu", "Modifica il menu"),
+        BotCommand("eventi", "Eventi sul sito"),
+        BotCommand("promozioni", "Promozioni sul sito"),
+        BotCommand("avviso", "Avviso in fondo al sito"),
+        BotCommand("aiuto", "Come si usa"),
+        BotCommand("stop", "Interrompe la domanda in corso"),
+    ])
+
 
 def main():
 
     if not ENV.get("TELEGRAM_TOKEN") or not ALLOWED:
         raise SystemExit("Configura TELEGRAM_TOKEN e ALLOWED_USER_IDS in .env")
 
-    app = Application.builder().token(ENV["TELEGRAM_TOKEN"]).build()
-
-    text = AUTH & filters.TEXT & ~filters.COMMAND
-
-    app.add_handler(ConversationHandler(
-        entry_points=[MessageHandler(AUTH & (filters.PHOTO | filters.Document.IMAGE), on_photo)],
-        states={
-            TYPE: [CallbackQueryHandler(on_type, pattern=r"^type:")],
-            TITLE: [MessageHandler(text, on_title)],
-            DATE: [MessageHandler(text, on_date)],
-            TIME: [MessageHandler(text, on_time)],
-            UNTIL: [MessageHandler(text, on_until)],
-        },
-        fallbacks=[CommandHandler("stop", on_stop, filters=AUTH)],
-        conversation_timeout=60 * 30,
-    ))
+    app = (
+        Application.builder()
+        .token(ENV["TELEGRAM_TOKEN"])
+        .post_init(post_init)
+        .build()
+    )
 
     commands = {
-        ("start", "aiuto", "help"): cmd_help,
-        ("eventi",): cmd_events,
-        ("promozioni", "promo"): cmd_promos,
-        ("prezzo",): cmd_price,
-        ("nascondi",): cmd_hide,
-        ("mostra",): cmd_show,
-        ("menu",): cmd_menu,
-        ("avviso",): cmd_notice,
-        ("annulla",): cmd_undo,
-        ("stato",): cmd_status,
+        "start": cmd_start,
+        "aiuto": cmd_help,
+        "help": cmd_help,
+        "stop": cmd_stop,
+        "menu": menu_screen,
+        "eventi": lambda u, c: entries_screen(u, c, promos=False),
+        "promozioni": lambda u, c: entries_screen(u, c, promos=True),
+        "avviso": cmd_notice,
+        "annulla": lambda u, c: more_action(u, c, "undo"),
+        "stato": lambda u, c: more_action(u, c, "log"),
+        "prezzo": cmd_price,
+        "nascondi": cmd_hide,
+        "mostra": cmd_show,
     }
 
-    for names, handler in commands.items():
-        app.add_handler(CommandHandler(list(names), handler, filters=AUTH))
+    for name, handler in commands.items():
+        app.add_handler(CommandHandler(name, handler, filters=AUTH))
 
-    app.add_handler(CallbackQueryHandler(on_confirm, pattern=r"^(publish|discard)$"))
-    app.add_handler(CallbackQueryHandler(on_remove, pattern=r"^remove:"))
-    app.add_handler(CallbackQueryHandler(on_pick, pattern=r"^pick:"))
-    app.add_handler(CallbackQueryHandler(on_undo, pattern=r"^undo:"))
-
-    app.add_handler(MessageHandler(AUTH, on_other))
+    app.add_handler(MessageHandler(AUTH & (filters.PHOTO | filters.Document.IMAGE), on_photo))
+    app.add_handler(MessageHandler(AUTH & filters.TEXT & ~filters.COMMAND, on_text))
+    app.add_handler(CallbackQueryHandler(on_callback))
 
     app.add_error_handler(on_error)
 
-    log.info("Bot avviato, anteprime su %s", PREVIEW_URL)
+    log.info("Bot avviato")
 
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
