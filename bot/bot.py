@@ -842,25 +842,8 @@ async def menu_screen(update, context):
 
     await respond(
         update,
-        "🍔 <b>Menu</b>\nScegli una categoria per modificare i prodotti, "
-        "oppure aggiungine uno nuovo.",
-        keyboard(
-            [("➕ Aggiungi prodotto", "addpick")],
-            *pairs(buttons),
-            [("📖 Vedi il menu sul sito", f"{SITE_URL}/menu.html")],
-        ),
-    )
-
-
-async def add_pick_screen(update, context):
-    """Aggiunta dal menu principale: prima si sceglie la categoria."""
-
-    buttons = [(c["title"], f"add:{c['id']}") for c in core.categories()]
-
-    await respond(
-        update,
-        "➕ <b>Nuovo prodotto</b>\nIn quale categoria?",
-        keyboard(*pairs(buttons), [("⬅️ Menu", "menu")]),
+        "🍔 <b>Menu</b>\nScegli una categoria:",
+        keyboard(*pairs(buttons), [("📖 Vedi il menu sul sito", f"{SITE_URL}/menu.html")]),
     )
 
 
@@ -883,8 +866,8 @@ async def category_screen(update, context, category_id):
         f"🍔 <b>{esc(category['title'])}</b>\n"
         "Tocca una voce per modificarla.\n⭐ = in homepage · 🙈 = nascosta",
         keyboard(
-            [(f"➕ Aggiungi in {category['title']}", f"add:{category_id}")],
             *rows,
+            [("➕ Aggiungi voce", f"add:{category_id}")],
             [("⬅️ Categorie", "menu")],
         ),
     )
@@ -1570,9 +1553,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if head == "ia":
         action, category_id, index = rest.split(":")
         return await item_action(update, context, action, category_id, int(index))
-
-    if data == "addpick":
-        return await add_pick_screen(update, context)
 
     if head == "add":
         return await add_start(update, context, rest)
