@@ -7,6 +7,7 @@ leggere da pubblicare, mantenendo la stessa struttura di cartelle.
 
 - Foto e locandine (senza trasparenza) -> .jpg
 - Immagini con trasparenza (es. logo)  -> .png, bordi trasparenti rimossi
+- Locandine (events/): bande nere degli screenshot rimosse
 - Rotazione EXIF applicata, metadati rimossi (niente GPS dai telefoni)
 
 Uso, dalla cartella del progetto:
@@ -30,6 +31,9 @@ EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 JPEG_QUALITY = 80
 
+# Sotto questa luminosità (0-255) un bordo è considerato "nero"
+BLACK_THRESHOLD = 24
+
 
 def max_width(relative_path):
     """Larghezza massima in base al tipo di immagine."""
@@ -51,6 +55,16 @@ def has_transparency(image):
     return image.mode == "P" and "transparency" in image.info
 
 
+def trim_black_borders(image):
+    """Rimuove le bande nere intorno alle locandine (screenshot)."""
+
+    mask = image.convert("L").point(lambda value: 255 if value > BLACK_THRESHOLD else 0)
+
+    box = mask.getbbox()
+
+    return image.crop(box) if box else image
+
+
 def optimize(source):
 
     relative = source.relative_to(SRC)
@@ -64,6 +78,9 @@ def optimize(source):
         image = image.crop(image.getchannel("A").getbbox())
     else:
         image = image.convert("RGB")
+
+        if relative.parts[0] == "events":
+            image = trim_black_borders(image)
 
     limit = max_width(relative)
 

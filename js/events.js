@@ -2,7 +2,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const nextEventSection = document.querySelector(".next-event");
     const eventFeature = document.querySelector(".event-feature");
+    const pastEventsSection = document.querySelector(".past-events");
     const pastEventsGrid = document.querySelector(".past-events-grid");
+    const promosSection = document.querySelector(".promos");
+    const promosGrid = document.querySelector(".promos-grid");
 
     let events = [];
     let countdownInterval = null;
@@ -25,8 +28,23 @@ document.addEventListener("DOMContentLoaded", () => {
         })
         .then(data => {
 
+            /*
+             * Le voci con "type": "promo" sono promozioni:
+             * restano visibili finché non vengono tolte
+             * dal file o fino alla data "until" (inclusa).
+             */
+            renderPromos(
+                data.filter(item =>
+                    item.type === "promo" &&
+                    item.title &&
+                    item.image &&
+                    !isExpired(item.until)
+                )
+            );
+
             events = data
                 .filter(event =>
+                    event.type !== "promo" &&
                     event.date &&
                     event.title &&
                     event.image
@@ -59,8 +77,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 nextEventSection.style.display = "none";
             }
 
-            if (pastEventsGrid) {
-                pastEventsGrid.innerHTML = "";
+            if (pastEventsSection) {
+                pastEventsSection.style.display = "none";
+            }
+
+            if (promosSection) {
+                promosSection.style.display = "none";
             }
         });
 
@@ -79,6 +101,92 @@ document.addEventListener("DOMContentLoaded", () => {
                 : "23:59";
 
         return new Date(`${date}T${eventTime}:00`);
+    }
+
+
+    function isExpired(until) {
+
+        if (!until) {
+            return false;
+        }
+
+        return createEventDate(until) < new Date();
+    }
+
+
+    /*
+    ========================================
+    PROMOZIONI
+    ========================================
+    */
+
+    function renderPromos(promos) {
+
+        if (!promosSection || !promosGrid) {
+            return;
+        }
+
+
+        if (promos.length === 0) {
+
+            promosSection.style.display = "none";
+
+            return;
+        }
+
+
+        promosSection.style.display = "";
+
+        promosGrid.innerHTML = promos
+            .map(promo => {
+
+                const title = escapeHtml(promo.title);
+
+                const whatsappText = encodeURIComponent(
+                    `Ciao! Vorrei informazioni sulla promozione "${promo.title}".`
+                );
+
+                return `
+                    <article class="promo-card">
+
+                        <a
+                            href="${escapeHtml(promo.image)}"
+                            class="promo-image"
+                            target="_blank"
+                            rel="noopener"
+                            aria-label="Apri la locandina ${title}"
+                        >
+                            <img
+                                src="${escapeHtml(promo.image)}"
+                                alt="Locandina ${title}"
+                                loading="lazy"
+                            >
+                        </a>
+
+
+                        <div class="promo-content">
+
+                            <h3>
+                                ${title}
+                            </h3>
+
+
+                            <a
+                                href="https://wa.me/393714952872?text=${whatsappText}"
+                                class="text-link"
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                Chiedi info
+                            </a>
+
+                        </div>
+
+                    </article>
+                `;
+
+            })
+            .join("");
     }
 
 
@@ -274,14 +382,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (pastEvents.length === 0) {
 
-            pastEventsGrid.innerHTML = `
-                <p class="past-events-empty">
-                    Gli eventi passati appariranno qui.
-                </p>
-            `;
+            pastEventsSection.style.display = "none";
 
             return;
         }
+
+
+        pastEventsSection.style.display = "";
 
 
         pastEventsGrid.innerHTML = pastEvents

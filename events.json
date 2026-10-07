@@ -6,15 +6,15 @@
         "image": "images/events/20261031_Halloween.jpg"
     },
     {
-        "date": "2026-01-02",
-        "time": "",
+        "type": "promo",
         "title": "Ribs",
-        "image": "images/events/20260102_Ribs.jpg"
+        "image": "images/events/20260102_Ribs.jpg",
+        "until": ""
     },
     {
-        "date": "2026-01-02",
-        "time": "",
+        "type": "promo",
         "title": "Dehor",
-        "image": "images/events/20260102_Dehor.jpg"
+        "image": "images/events/20260102_Dehor.jpg",
+        "until": ""
     }
 ]

@@ -571,6 +571,69 @@ p {
 
 
 /* =========================================================
+   9b. PROMOZIONI
+========================================================= */
+
+.promos-grid {
+    display: grid;
+
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+
+    align-items: start;
+
+    gap: 20px;
+}
+
+
+.promo-card {
+    overflow: hidden;
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+
+    background: var(--bg-card);
+}
+
+
+.promo-image {
+    display: block;
+
+    background: #0c0b0a;
+}
+
+
+.promo-image img {
+    width: 100%;
+    height: auto;
+
+    transition: opacity var(--transition);
+}
+
+
+.promo-image:hover img {
+    opacity: 0.85;
+}
+
+
+.promo-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 12px;
+
+    padding: 14px 16px;
+}
+
+
+.promo-content h3 {
+    margin: 0;
+
+    font-size: 1.1rem;
+}
+
+
+/* =========================================================
    10. LOCALE
 ========================================================= */
 
@@ -1667,6 +1730,25 @@ a:focus-visible {
 
     .next-event.section {
         padding-block: 44px;
+    }
+
+
+    .promos-grid {
+        display: flex;
+
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+
+        gap: 14px;
+
+        padding-bottom: 6px;
+    }
+
+
+    .promo-card {
+        flex: 0 0 78%;
+
+        scroll-snap-align: start;
     }
 
 
