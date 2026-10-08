@@ -16,5 +16,11 @@
         "title": "Dehor",
         "image": "images/events/20260102_Dehor.jpg",
         "until": ""
+    },
+    {
+        "date": "2026-11-12",
+        "time": "21:00",
+        "title": "Test",
+        "image": "images/events/20261112_test.jpg"
     }
 ]
