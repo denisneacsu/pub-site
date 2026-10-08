@@ -184,31 +184,35 @@ document.addEventListener("DOMContentLoaded", () => {
             return `
                 <div class="beer-item">
 
-                    <div>
+                    <div class="menu-item-line">
                         <strong>${escapeHtml(item.name)}</strong>
-                        ${description}
+                        <span class="menu-leader" aria-hidden="true"></span>
+                        <div class="beer-prices">
+                            ${prices}
+                        </div>
                     </div>
 
-                    <div class="beer-prices">
-                        ${prices}
-                    </div>
+                    ${description}
 
                 </div>
             `;
         }
 
 
+        /*
+         * Nome, linea puntinata e prezzo sulla stessa riga,
+         * descrizione sotto: l'occhio segue la riga fino al prezzo.
+         */
         return `
             <div class="menu-item">
 
-                <div>
+                <div class="menu-item-line">
                     <strong>${escapeHtml(item.name)}</strong>
-                    ${description}
+                    <span class="menu-leader" aria-hidden="true"></span>
+                    <span class="menu-price">${formatPrice(item.price)}</span>
                 </div>
 
-                <span>
-                    ${formatPrice(item.price)}
-                </span>
+                ${description}
 
             </div>
         `;

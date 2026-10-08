@@ -1450,6 +1450,40 @@ p {
 }
 
 
+/* Voce del menu: nome · · · · · prezzo, descrizione sotto */
+.menu-item,
+.beer-item {
+    display: block;
+}
+
+
+.menu-item-line {
+    display: flex;
+    align-items: baseline;
+
+    gap: 10px;
+}
+
+
+.menu-item-line strong {
+    flex-shrink: 1;
+}
+
+
+.menu-item-line .menu-leader {
+    flex: 1 1 auto;
+
+    min-width: 16px;
+
+    border-bottom: 1px dotted var(--border-light);
+}
+
+
+.menu-item-line .menu-price {
+    flex-shrink: 0;
+}
+
+
 .menu-category-head {
     display: flex;
 
