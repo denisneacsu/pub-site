@@ -2521,6 +2521,25 @@ a:focus-visible {
 }
 
 
+/* Titoli Cucina / Bevande come le categorie della pagina menu */
+.menu-preview-column .menu-column-title {
+    display: block;
+
+    margin-bottom: 6px;
+    padding-bottom: 10px;
+
+    border-bottom: 2px solid var(--accent);
+
+    color: var(--accent-light);
+
+    font-size: 1.5rem;
+    font-weight: 700;
+
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+}
+
+
 .menu-preview-item {
     display: flex;
 

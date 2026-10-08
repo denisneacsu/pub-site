@@ -242,7 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="menu-preview-column">
 
                         <span class="menu-column-title">
-                            ${escapeHtml(section.title.toUpperCase())}
+                            ${escapeHtml(section.title)}
                         </span>
 
                         ${items.map(renderFeaturedItem).join("")}
