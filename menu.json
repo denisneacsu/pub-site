@@ -62,7 +62,7 @@
                         { "name": "Stella Artois", "prices": [3.5, 6] },
                         { "name": "Panaché", "description": "Stella Artois con gazzosa o Sprite.", "prices": [3.5, 6] },
                         { "name": "Tennent's", "prices": [4, null], "featured": true },
-                        { "name": "Corona", "prices": [4, null] },
+                        { "name": "Corona", "prices": [5, null] },
                         { "name": "Ceres", "prices": [4, null] }
                     ]
                 },
