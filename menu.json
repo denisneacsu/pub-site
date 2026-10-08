@@ -43,7 +43,7 @@
                         { "name": "Hagrid", "description": "Porchetta, insalata, maionese e pomodoro.", "price": 6.5 },
                         { "name": "Silente", "description": "Cotto o crudo, rucola e stracchino.", "price": 5.5 },
                         { "name": "Dobby", "description": "Cotto e formaggio.", "price": 5 },
-                        { "name": "Pulled pork", "description": "Carne di maiale sfilacciata con salsa BBQ e insalata coleslaw", "price": 8.5 }
+                        { "name": "Pulled pork", "description": "Carne di maiale sfilacciata con salsa BBQ e insalata coleslaw", "price": 8.5, "available": false }
                     ]
                 }
             ]
