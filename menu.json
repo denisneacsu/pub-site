@@ -13,7 +13,7 @@
                         { "name": "Patatine con buccia", "price": 5.5 },
                         { "name": "Anelli di cipolla", "price": 5.5 },
                         { "name": "Crocchette di patate", "price": 5.5 },
-                        { "name": "Nuggets", "price": 5.5 },
+                        { "name": "Nuggets", "price": 5.5, "featured": true },
                         { "name": "Patatine cheddar e bacon", "price": 6.5, "featured": true }
                     ]
                 },
