@@ -100,16 +100,16 @@
                 aria-label="Navigazione principale"
             >
 
-                <a href="#locale">
-                    Il locale
-                </a>
-
                 <a href="#eventi">
                     Eventi
                 </a>
 
                 <a href="#menu">
                     Menu
+                </a>
+
+                <a href="#locale">
+                    Il locale
                 </a>
 
                 <a href="#contatti">
@@ -289,6 +289,60 @@
         </section>
 
 
+
+        <!-- ================================
+             MENU
+        ================================= -->
+
+        <section class="section menu-preview" id="menu">
+
+            <div class="container">
+
+                <div class="section-heading">
+                    <div>
+                        <span class="eyebrow">Il menu</span>
+                        <h2>Qualcosa da bere, qualcosa da mangiare.</h2>
+                    </div>
+
+                    <p>
+                        Una selezione di quello che puoi trovare al MEMPHIS①.
+                    </p>
+                </div>
+
+
+                <div
+                    class="menu-preview-grid"
+                    data-menu="featured"
+                >
+
+                    <!--
+                        Le voci in evidenza vengono caricate
+                        automaticamente da menu.json
+                        (voci con "featured": true).
+                    -->
+
+                </div>
+
+
+                <p
+                    class="menu-preview-note"
+                    data-menu-note
+                ></p>
+
+
+                <div class="menu-preview-action">
+
+                    <a href="menu.html" class="btn btn-primary">
+                        Visualizza il menu completo
+                    </a>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
         <!-- ================================
             PROMOZIONI
         ================================= -->
@@ -336,38 +390,6 @@
         </section>
 
 
-        <!-- ================================
-             INTRO
-        ================================= -->
-
-        <section class="intro section">
-
-            <div class="container intro-content">
-
-                <p class="eyebrow">
-                    BIRRERIA · CUCINA · SERATE
-                </p>
-
-
-                <h2>
-                    Una birra, qualcosa da mangiare
-                    e un tavolo con gli amici.
-                </h2>
-
-
-                <p>
-                    Al MEMPHIS① trovi birre alla spina,
-                    panini, carne, fritti, pinsa e cocktail.
-                    E quando hai finito di mangiare puoi
-                    fermarti per una partita a biliardo
-                    o a calcio balilla.
-                </p>
-
-            </div>
-
-        </section>
-
-
 
         <!-- ================================
              IL LOCALE
@@ -398,15 +420,18 @@
 
 
                     <h2>
-                        Una serata non finisce al tavolo.
-                    </h2>
+                    Una birra, qualcosa da mangiare
+                    e un tavolo con gli amici.
+                </h2>
 
 
                     <p>
-                        Il locale ha una sala dove puoi
-                        fermarti a bere qualcosa, giocare
-                        e passare la serata con gli amici.
-                    </p>
+                    Al MEMPHIS① trovi birre alla spina,
+                    panini, carne, fritti, pinsa e cocktail.
+                    E quando hai finito di mangiare puoi
+                    fermarti per una partita a biliardo
+                    o a calcio balilla.
+                </p>
 
 
                     <div class="activities">
@@ -438,205 +463,39 @@
 
                         </div>
 
+
+                        <div class="activity">
+
+                            <h3>
+                                Dehor
+                            </h3>
+
+                            <p>
+                                Si può riservare per feste private.
+                            </p>
+
+                        </div>
+
                     </div>
 
                 </div>
 
             </div>
 
-        </section>
 
+            <div class="container locale-gallery">
 
-
-        <!-- ================================
-             ATMOSFERA
-        ================================= -->
-
-        <section class="atmosphere">
-
-            <div class="atmosphere-image">
+                <img
+                    src="images/calcetto.jpg"
+                    alt="Calcio balilla del MEMPHIS①"
+                    loading="lazy"
+                >
 
                 <img
                     src="images/sala_atmosfera.jpg"
                     alt="Atmosfera della sala del MEMPHIS①"
+                    loading="lazy"
                 >
-
-            </div>
-
-
-            <div class="atmosphere-overlay"></div>
-
-
-            <div class="container atmosphere-content">
-
-                <p class="eyebrow">
-                    LA SALA
-                </p>
-
-
-                <h2>
-                    Birra, musica e una serata da passare insieme.
-                </h2>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- ================================
-             SPECIALITÀ
-        ================================= -->
-
-        <section
-            class="specialita section"
-            id="specialita"
-        >
-
-            <div class="container">
-
-                <div class="section-heading">
-
-                    <div>
-
-                        <p class="eyebrow">
-                            DALLA CUCINA
-                        </p>
-
-
-                        <h2>
-                            Alcune specialità
-                        </h2>
-
-                    </div>
-
-
-                    <p>
-                        Il menu comprende panini, carne,
-                        fritti, pinsa e altre proposte.
-                    </p>
-
-                </div>
-
-
-                <div class="specialita-grid">
-
-                    <article class="specialita-card">
-
-                        <div class="specialita-image">
-
-                            <img
-                                src="images/hero_birra_panino_16-9.jpg"
-                                alt="Panino e birra al MEMPHIS①"
-                            >
-
-                        </div>
-
-
-                        <div class="specialita-content">
-
-                            <span class="card-label">
-                                PANINO
-                            </span>
-
-
-                            <h3>
-                                Pulled Pork
-                            </h3>
-
-
-                            <p>
-                                Il panino con pulled pork
-                                viene proposto anche con
-                                birra o bibita inclusa.
-                            </p>
-
-                        </div>
-
-                    </article>
-
-
-                    <article class="specialita-card specialita-dark">
-
-                        <div class="specialita-placeholder">
-
-                            <span>
-                                RIBS
-                            </span>
-
-                            <small>
-                                Specialità dalla cucina
-                            </small>
-
-                        </div>
-
-
-                        <div class="specialita-content">
-
-                            <span class="card-label">
-                                PIATTO
-                            </span>
-
-
-                            <h3>
-                                Ribs di maiale
-                            </h3>
-
-
-                            <p>
-                                Ribs di maiale preparate
-                                dalla cucina del locale.
-                            </p>
-
-                        </div>
-
-                    </article>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- ================================
-             CALCETTO
-        ================================= -->
-
-        <section class="activity-feature section">
-
-            <div class="container activity-feature-grid">
-
-                <div class="activity-feature-image">
-
-                    <img
-                        src="images/calcetto.jpg"
-                        alt="Calcio balilla al MEMPHIS①"
-                    >
-
-                </div>
-
-
-                <div class="activity-feature-content">
-
-                    <p class="eyebrow">
-                        DOPO CENA
-                    </p>
-
-
-                    <h2>
-                        Una partita ci sta sempre.
-                    </h2>
-
-
-                    <p>
-                        Il calcio balilla è a disposizione
-                        per una sfida veloce o una partita
-                        tra amici.
-                    </p>
-
-                </div>
 
             </div>
 
@@ -706,60 +565,6 @@
 
         </section>
 
-
-
-        <!-- ================================
-             MENU
-        ================================= -->
-
-        <section class="section menu-preview" id="menu">
-
-            <div class="container">
-
-                <div class="section-heading">
-                    <div>
-                        <span class="eyebrow">Il menu</span>
-                        <h2>Qualcosa da bere, qualcosa da mangiare.</h2>
-                    </div>
-
-                    <p>
-                        Una selezione di quello che puoi trovare al MEMPHIS①.
-                    </p>
-                </div>
-
-
-                <div
-                    class="menu-preview-grid"
-                    data-menu="featured"
-                >
-
-                    <!--
-                        Le voci in evidenza vengono caricate
-                        automaticamente da menu.json
-                        (voci con "featured": true).
-                    -->
-
-                </div>
-
-
-                <p
-                    class="menu-preview-note"
-                    data-menu-note
-                ></p>
-
-
-                <div class="menu-preview-action">
-
-                    <a href="menu.html" class="btn btn-primary">
-                        Visualizza il menu completo
-                    </a>
-
-                </div>
-
-            </div>
-
-        </section>
-
         
 
                 
@@ -798,128 +603,6 @@
                         Gli eventi vengono caricati
                         automaticamente da events.json.
                     -->
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- ================================
-             GALLERY
-        ================================= -->
-
-        <section class="gallery section">
-
-            <div class="container">
-
-                <div class="section-heading">
-
-                    <div>
-
-                        <p class="eyebrow">
-                            IL LOCALE
-                        </p>
-
-
-                        <h2>
-                            Gli spazi del MEMPHIS①
-                        </h2>
-
-                    </div>
-
-                </div>
-
-
-                <div class="gallery-grid">
-
-                    <div class="gallery-item gallery-large">
-
-                        <img
-                            src="images/sala.jpg"
-                            alt="Sala del MEMPHIS①"
-                        >
-
-                    </div>
-
-
-                    <div class="gallery-item">
-
-                        <img
-                            src="images/calcetto.jpg"
-                            alt="Calcio balilla del MEMPHIS①"
-                        >
-
-                    </div>
-
-
-                    <div class="gallery-item">
-
-                        <img
-                            src="images/sala_atmosfera.jpg"
-                            alt="Atmosfera della sala del MEMPHIS①"
-                        >
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- ================================
-             SOCIAL
-        ================================= -->
-
-        <section class="social section">
-
-            <div class="container social-inner">
-
-                <div>
-
-                    <p class="eyebrow">
-                        SOCIAL
-                    </p>
-
-
-                    <h2>
-                        Foto, aggiornamenti e serate.
-                    </h2>
-
-                </div>
-
-
-                <div class="social-links">
-
-                    <a
-                        href="https://www.instagram.com/memphisristopub"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        Instagram
-                    </a>
-
-
-                    <a
-                        href="https://www.facebook.com/profile.php?id=61581220463840&locale=it_IT"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        Facebook
-                    </a>
-
-
-                    <a
-                        href="https://wa.me/393714952872?text=Ciao%21%20Vi%20scrivo%20dal%20sito%20del%20Memphis."
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        WhatsApp
-                    </a>
 
                 </div>
 
@@ -1003,11 +686,10 @@
 
                     </div>
 
-
                     <div class="contact-box">
 
                         <span class="contact-label">
-                            WHATSAPP
+                            CONTATTI
                         </span>
 
 
@@ -1016,14 +698,37 @@
                         </p>
 
 
-                        <a
-                            href="https://wa.me/393714952872?text=Ciao%21%20Vorrei%20qualche%20informazione."
-                            target="_blank"
-                            rel="noopener"
-                            class="text-link"
-                        >
-                            Scrivici su WhatsApp
-                        </a>
+                        <div class="contact-actions">
+
+                            <a
+                                href="https://wa.me/393714952872?text=Ciao%21%20Vorrei%20qualche%20informazione."
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                WhatsApp
+                            </a>
+
+                            <a href="tel:+393714952872">
+                                Chiama
+                            </a>
+
+                            <a
+                                href="https://www.instagram.com/memphisristopub"
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                Instagram
+                            </a>
+
+                            <a
+                                href="https://www.facebook.com/profile.php?id=61581220463840&locale=it_IT"
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                Facebook
+                            </a>
+
+                        </div>
 
                     </div>
 
@@ -1083,20 +788,17 @@
 
             <div class="footer-links">
 
-                <a href="#menu" class="header-menu-btn">
-                    Guarda il menu
-                </a>
-
-
-                <a href="#locale">
-                    Il locale
-                </a>
-
-
                 <a href="#eventi">
                     Eventi
                 </a>
 
+                <a href="#menu">
+                    Menu
+                </a>
+
+                <a href="#locale">
+                    Il locale
+                </a>
 
                 <a href="#contatti">
                     Dove siamo

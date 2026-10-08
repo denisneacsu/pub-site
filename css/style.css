@@ -870,6 +870,31 @@ p {
 }
 
 
+/* Foto sotto "Il locale" */
+
+.locale-gallery {
+    display: grid;
+
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    gap: 16px;
+
+    margin-top: 24px;
+}
+
+
+.locale-gallery img {
+    width: 100%;
+
+    aspect-ratio: 4 / 3;
+
+    border-radius: var(--radius);
+
+    object-fit: cover;
+}
+
+
+
 /* =========================================================
    11. ATMOSPHERE
 ========================================================= */
@@ -1683,6 +1708,37 @@ p {
 
     min-height: 400px;
 }
+
+
+/* Pulsanti contatti e social */
+
+.contact-actions {
+    display: flex;
+    flex-wrap: wrap;
+
+    gap: 8px;
+}
+
+
+.contact-actions a {
+    padding: 8px 14px;
+
+    border: 1px solid var(--border-light);
+    border-radius: 999px;
+
+    color: var(--text);
+
+    font-size: 0.85rem;
+    font-weight: 600;
+
+    transition: border-color var(--transition);
+}
+
+
+.contact-actions a:hover {
+    border-color: var(--accent);
+}
+
 
 
 /* =========================================================
