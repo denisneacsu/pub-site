@@ -271,15 +271,33 @@ p {
     display: flex;
     align-items: center;
 
+    gap: 10px;
+
     flex-shrink: 0;
 }
 
 
+/* Il logo originale è rosso scuro a linee sottili: lo schiarisco sul fondo scuro */
 .logo img {
     width: 52px;
     height: 52px;
 
     object-fit: contain;
+
+    filter:
+        brightness(2.1)
+        saturate(1.1)
+        drop-shadow(0 0 6px rgba(208, 138, 77, 0.45));
+}
+
+
+.logo-name {
+    color: var(--white);
+
+    font-size: 0.95rem;
+    font-weight: 800;
+
+    letter-spacing: 0.14em;
 }
 
 
@@ -1423,8 +1441,19 @@ p {
 }
 
 
+.menu-category-head {
+    padding-bottom: 10px;
+
+    border-bottom: 2px solid var(--accent);
+}
+
+
 .menu-category-head h3 {
     margin-bottom: 0;
+
+    color: var(--accent-light);
+
+    font-size: 1.5rem;
 }
 
 
@@ -2353,7 +2382,15 @@ a:focus-visible {
 
     .menu-columns-head span,
     .beer-prices span {
-        width: 56px;
+        width: 62px;
+    }
+
+
+    /* "BOTTIGLIA" deve stare nella colonna */
+    .menu-columns-head span {
+        font-size: 0.6rem;
+
+        letter-spacing: 0.02em;
     }
 
 
