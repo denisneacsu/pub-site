@@ -359,17 +359,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         </span>
                     </div>
 
-
-                    <div>
-                        <strong data-countdown="seconds">
-                            00
-                        </strong>
-
-                        <span>
-                            SEC
-                        </span>
-                    </div>
-
                 </div>
 
 
@@ -590,10 +579,6 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-        const seconds =
-            totalSeconds % 60;
-
-
         /*
          * Aggiorniamo SOLO il testo dei numeri.
          * Nessuna ricostruzione delle card.
@@ -614,11 +599,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 '[data-countdown="minutes"]'
             );
 
-        const secondsElement =
-            document.querySelector(
-                '[data-countdown="seconds"]'
-            );
-
 
         if (daysElement) {
             daysElement.textContent =
@@ -635,12 +615,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (minutesElement) {
             minutesElement.textContent =
                 String(minutes).padStart(2, "0");
-        }
-
-
-        if (secondsElement) {
-            secondsElement.textContent =
-                String(seconds).padStart(2, "0");
         }
     }
 
