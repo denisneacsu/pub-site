@@ -1,5 +1,11 @@
 [
     {
+        "type": "promo",
+        "title": "Test evento",
+        "image": "images/events/20261008_test-evento.jpg",
+        "until": "2026-10-31"
+    },
+    {
         "date": "2026-10-31",
         "time": "19:30",
         "title": "Halloween",
