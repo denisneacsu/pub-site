@@ -223,6 +223,9 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, action,
     if action == "publishfeat" and change:
         change["featured"] = True
 
+    if change:
+        change["by"] = query.from_user.first_name
+
     if action == "discard" or change is None:
         text = "Annullato, non ho pubblicato nulla." if change else "Questa anteprima è scaduta."
         return await query.message.reply_text(text)
@@ -1332,9 +1335,22 @@ async def more_action(update, context, action):
         return await respond(update, HELP, keyboard([("⬅️ Altro", "more")]))
 
     if action == "log":
-        lines = await in_repo(core.recent_changes)
+
+        changes = await in_repo(core.recent_changes)
+
+        lines = []
+
+        for change in changes:
+            if change["author"] == core.BOT_AUTHOR:
+                lines.append(f"🤖 {change['when']} · {esc(change['subject'])}")
+            else:
+                lines.append(f"🛠️ {change['when']} · {esc(change['subject'])} <i>({esc(change['author'])})</i>")
+
         return await respond(
-            update, f"🕑 <b>Ultime modifiche al sito</b>\n\n{esc(lines)}",
+            update,
+            "🕑 <b>Ultime modifiche al sito</b>\n"
+            "🤖 = dal bot · 🛠️ = a mano (sviluppo)\n\n"
+            + ("\n".join(lines) or "Nessuna modifica."),
             keyboard([("⬅️ Altro", "more")]),
         )
 
@@ -1362,7 +1378,7 @@ async def undo_confirmed(update, context):
     await respond(update, "⏳ Annullo…")
 
     try:
-        await in_repo(core.revert_last)
+        await in_repo(core.revert_last, update.effective_user.first_name)
     except Exception as error:
         log.exception("Annulla fallito")
         return await respond(update, f"⚠️ Non riuscito: {error}")
@@ -1647,11 +1663,7 @@ def bot_changes():
 def is_site_change(commit):
     """Commit che cambia il sito visibile (non solo bot, script o file tecnici)."""
 
-    technical = ("bot/", "tools/", "CNAME", ".gitignore", ".nojekyll")
-
-    return commit["author"] != core.BOT_AUTHOR and any(
-        not f.startswith(technical) for f in commit["files"]
-    )
+    return commit["author"] != core.BOT_AUTHOR and core.touches_site(commit["files"])
 
 
 def site_changes():

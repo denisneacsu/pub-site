@@ -311,28 +311,64 @@ def last_bot_commit():
     return (subject, commit) if author == BOT_AUTHOR else None
 
 
-def revert_last():
+def with_author(message, by):
+    """Descrizione della modifica con il nome di chi l'ha confermata."""
+    return f"{message} ({by})" if by else message
+
+
+def revert_last(by=None):
 
     sync()
 
     subject = git("log", "-1", "--format=%s")
 
     git("revert", "--no-edit", "HEAD")
-    git("commit", "--quiet", "--amend", "-m", f"Annullato: {subject}")
+    message = f"Annullato da {by}: {subject}" if by else f"Annullato: {subject}"
+
+    git("commit", "--quiet", "--amend", "-m", message)
     git("push", "--quiet", "origin", "main")
 
     return git("rev-parse", "--short", "HEAD")
 
 
+# File che non cambiano il sito visibile (codice del bot, script, configurazione)
+TECHNICAL_PATHS = ("bot/", "tools/", "CNAME", ".gitignore", ".nojekyll")
+
+
+def touches_site(files):
+    return any(not f.startswith(TECHNICAL_PATHS) for f in files)
+
+
 def recent_changes(count=8):
+    """Ultime modifiche al sito visibile, senza quelle solo tecniche."""
 
     sync()
 
-    return git(
-        "log", f"-{count}",
-        "--format=%cd · %an · %s",
+    out = git(
+        "log", "-100",
+        "--format=%x1e%cd%x09%an%x09%s",
         "--date=format:%d/%m %H:%M",
+        "--name-only",
     )
+
+    changes = []
+
+    for block in out.split("\x1e"):
+
+        lines = [line for line in block.strip().splitlines() if line]
+
+        if not lines:
+            continue
+
+        when, author, subject = lines[0].split("\t", 2)
+
+        if touches_site(lines[1:]):
+            changes.append({"when": when, "author": author, "subject": subject})
+
+        if len(changes) == count:
+            break
+
+    return changes
 
 
 def head():
@@ -741,7 +777,7 @@ def publish(change):
 
     message, paths = apply_change(change)
 
-    return commit_and_push(message, paths), paths
+    return commit_and_push(with_author(message, change.get("by")), paths), paths
 
 
 def fetch_live(path):
