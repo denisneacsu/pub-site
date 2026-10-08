@@ -283,12 +283,16 @@ def sync():
     git("clean", "--quiet", "-fd")
 
 
+class AlreadyPublished(Exception):
+    """La modifica è già sul sito (es. conferma premuta due volte)."""
+
+
 def commit_and_push(message, paths):
 
     git("add", "-A", "--", *paths)
 
     if not git("status", "--porcelain", "--", *paths):
-        raise RuntimeError("Nessuna modifica da pubblicare.")
+        raise AlreadyPublished()
 
     git("commit", "--quiet", "-m", message)
 

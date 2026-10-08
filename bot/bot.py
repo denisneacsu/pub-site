@@ -234,6 +234,8 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, action,
 
     try:
         commit, paths = await in_repo(core.publish, change)
+    except core.AlreadyPublished:
+        return await status.edit_text("✅ Questa modifica è già sul sito, non serve ripubblicarla.")
     except Exception as error:
         log.exception("Pubblicazione fallita")
         return await status.edit_text(f"⚠️ Pubblicazione non riuscita: {error}")
