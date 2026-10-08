@@ -1358,6 +1358,27 @@ p {
 }
 
 
+/* Nota "menu in aggiornamento" anche in cima alla pagina */
+.menu-note-top {
+    margin: -12px 0 28px;
+    padding: 12px 16px;
+
+    border-left: 3px solid var(--accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+
+    background: var(--bg-card);
+
+    color: var(--text-soft);
+
+    font-size: 0.85rem;
+}
+
+
+.menu-note-top:empty {
+    display: none;
+}
+
+
 .menu-page-header {
     max-width: 640px;
 
