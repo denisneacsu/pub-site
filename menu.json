@@ -169,7 +169,7 @@
                         { "name": "Genepì", "price": 4 },
                         { "name": "Mirto", "price": 4 },
                         { "name": "Limoncello", "price": 4 },
-                        { "name": "Sambuca", "price": 4 },
+                        { "name": "Sambuca", "price": 4, "featured": true },
                         { "name": "Amaretto", "price": 4 },
                         { "name": "Baileys", "price": 4 },
                         { "name": "Grand Marnier", "price": 4 },
