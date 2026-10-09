@@ -125,7 +125,6 @@
                     "items": [
                         { "name": "Coca-Cola", "price": 3.5 },
                         { "name": "Coca-Cola Zero", "description": "Bottiglia", "price": 3.5 },
-                        { "name": "Gazzosa", "description": "Lurisia", "price": 3.5 },
                         { "name": "Aranciata", "description": "Lurisia", "price": 3.5 },
                         { "name": "Acqua tonica", "description": "Lurisia", "price": 3.5 },
                         { "name": "Schweppes", "price": 3.5 },
