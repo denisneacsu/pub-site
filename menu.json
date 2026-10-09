@@ -123,7 +123,7 @@
                     "id": "bibite",
                     "title": "Bibite",
                     "items": [
-                        { "name": "Coca-Cola", "description": "Bottiglia", "price": 3.5 },
+                        { "name": "Coca-Cola", "price": 3.5 },
                         { "name": "Coca-Cola Zero", "description": "Bottiglia", "price": 3.5 },
                         { "name": "Gazzosa", "description": "Lurisia", "price": 3.5 },
                         { "name": "Aranciata", "description": "Lurisia", "price": 3.5 },
