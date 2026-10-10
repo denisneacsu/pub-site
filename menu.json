@@ -125,7 +125,7 @@
                         { "name": "Acqua tonica", "price": 3.5 },
                         { "name": "Schweppes", "price": 3.5 },
                         { "name": "Red Bull", "price": 3.5 },
-                        { "name": "Tè limone / pesca", "description": "Fuze Tea", "price": 2.5 },
+                        { "name": "Tè limone / pesca", "price": 2.5 },
                         { "name": "Fanta", "price": 2.5 },
                         { "name": "Sprite", "price": 2.5 },
                         { "name": "Acqua", "description": "0,5 l", "price": 1.2 }
