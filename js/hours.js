@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
     /*
      * Badge "Aperto ora / Chiuso" calcolato sull'ora italiana.
      *
-     * Orari: dal martedì alla domenica 17:00 – 02:30, lunedì chiuso.
+     * Orari: dal martedì alla domenica 19:00 – 02:30, lunedì chiuso.
      * La chiusura dopo mezzanotte appartiene alla serata precedente:
      * martedì all'01:00 il locale è chiuso (lunedì non apre),
      * lunedì all'01:00 è aperto (coda della domenica).
@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
      */
 
     const OPEN_DAYS = [0, 2, 3, 4, 5, 6];   // 0 = domenica, 1 = lunedì...
-    const OPENS = "17:00";
+    const OPENS = "19:00";
     const CLOSES = "02:30";
 
     const DAY_NAMES = [

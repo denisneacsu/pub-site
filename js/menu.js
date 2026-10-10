@@ -232,7 +232,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const items = section.categories
                     .flatMap(category => visibleItems(category.items))
-                    .filter(item => item.featured);
+                    .filter(item => item.featured)
+                    .sort((a, b) => sortPrice(b) - sortPrice(a));
 
                 if (items.length === 0) {
                     return "";
@@ -291,9 +292,40 @@ document.addEventListener("DOMContentLoaded", () => {
     /*
      * Una voce con "available": false resta nel file
      * ma non viene mostrata (es. piatto finito o sospeso).
+     *
+     * Le voci sono ordinate dal prezzo più alto (per le birre
+     * conta il più basso, cioè la piccola, come nel "da" della
+     * homepage, e a parità la media); i gruppi (es. vini
+     * Rossi / Bianchi) restano nell'ordine del file e a parità
+     * di prezzo resta l'ordine del file.
      */
     function visibleItems(items) {
-        return (items || []).filter(item => item.available !== false);
+
+        const visible = (items || []).filter(item => item.available !== false);
+
+        const groups = [...new Set(visible.map(item => item.group || ""))];
+
+        return visible.sort((a, b) =>
+            groups.indexOf(a.group || "") - groups.indexOf(b.group || "") ||
+            sortPrice(b) - sortPrice(a) ||
+            highestPrice(b) - highestPrice(a)
+        );
+    }
+
+
+    function highestPrice(item) {
+
+        const prices = (item.prices || [item.price]).filter(isPrice);
+
+        return prices.length > 0 ? Math.max(...prices) : 0;
+    }
+
+
+    function sortPrice(item) {
+
+        const prices = (item.prices || [item.price]).filter(isPrice);
+
+        return prices.length > 0 ? Math.min(...prices) : 0;
     }
 
 

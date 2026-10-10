@@ -52,14 +52,10 @@
             "categories": [
                 {
                     "id": "birre",
-                    "title": "Birre alla spina",
+                    "title": "Birre",
                     "columns": ["Piccola", "Media"],
                     "items": [
-                        { "name": "Hoegaarden", "prices": [4, 7] },
-                        { "name": "Leffe Rouge", "prices": [4, 7], "featured": true },
-                        { "name": "Leffe Ambrée", "prices": [4, 7] },
-                        { "name": "Goose IPA", "prices": [null, 5] },
-                        { "name": "Stella Artois", "prices": [3.5, 6] },
+                        { "name": "Stella Artois", "prices": [3.5, 6], "featured": true },
                         { "name": "Panaché", "description": "Stella Artois con gazzosa o Sprite.", "prices": [3.5, 6] },
                         { "name": "Tennent's", "prices": [4, null], "featured": true },
                         { "name": "Corona", "prices": [5, null] },

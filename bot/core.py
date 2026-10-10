@@ -196,7 +196,7 @@ def shown_featured(events):
 
 
 # Orari normali (uguali a js/hours.js): lunedì chiuso
-NORMAL_OPENS = "17:00"
+NORMAL_OPENS = "19:00"
 NORMAL_CLOSES = "02:30"
 
 
