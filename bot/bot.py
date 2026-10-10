@@ -1959,7 +1959,13 @@ async def post_init(app: Application):
 
     if news:
         lines = "\n".join(f"• {esc(subject)}" for subject in news[-10:])
-        await notify_all(app.bot, f"🔄 <b>Bot aggiornato</b>\n{lines}\n\nScrivi /start se non vedi i pulsanti nuovi.")
+        # Con il messaggio arriva anche la tastiera nuova: niente /start
+        await notify_all(
+            app.bot,
+            f"🔄 <b>Bot aggiornato</b>\n{lines}\n\n"
+            "I pulsanti in basso sono già aggiornati. Se non li vedi, scrivi /start.",
+            markup=MAIN_KEYBOARD,
+        )
 
     # Il primo controllo segnala anche le modifiche fatte mentre il bot era spento
     app.job_queue.run_repeating(check_site, interval=SITE_CHECK_SECONDS, first=20)
