@@ -2,8 +2,8 @@
 Parte "tecnica" del bot: file del sito, git, modifiche e anteprime.
 
 Ogni modifica è un dizionario ("change") che apply_change() applica ai
-file. Si applica due volte: per l'anteprima (poi scartata) e alla
-conferma, su una copia appena allineata a GitHub.
+file. Le modifiche non vanno subito sul sito: si accumulano in una lista
+comune (vedi MODIFICHE DA PUBBLICARE) e partono tutte con un solo push.
 """
 
 import json
@@ -275,19 +275,26 @@ def git(*args):
     return result.stdout.strip()
 
 
-def sync():
-    """Allinea la copia del bot a GitHub, scartando residui locali."""
+def reset_to_origin():
+    """Copia del bot uguale a GitHub, senza le modifiche in attesa."""
 
     git("fetch", "--quiet", "origin")
     git("reset", "--quiet", "--hard", "origin/main")
     git("clean", "--quiet", "-fd")
 
 
+def discard_local():
+    """Scarta i file toccati e non ancora committati."""
+
+    git("reset", "--quiet", "--hard", "HEAD")
+    git("clean", "--quiet", "-fd")
+
+
 class AlreadyPublished(Exception):
-    """La modifica è già sul sito (es. conferma premuta due volte)."""
+    """La modifica non cambia nulla (es. conferma premuta due volte)."""
 
 
-def commit_and_push(message, paths):
+def commit_local(message, paths):
 
     git("add", "-A", "--", *paths)
 
@@ -296,21 +303,27 @@ def commit_and_push(message, paths):
 
     git("commit", "--quiet", "-m", message)
 
+
+def push():
+
     try:
-        git("push", "--quiet", "origin", "main")
+        git("push", "--quiet", "origin", "HEAD:main")
     except RuntimeError:
         # Qualcuno ha pubblicato nel frattempo: ci si rimette in coda
-        git("pull", "--quiet", "--rebase", "origin", "main")
-        git("push", "--quiet", "origin", "main")
-
-    return git("rev-parse", "--short", "HEAD")
+        try:
+            git("pull", "--quiet", "--rebase", "origin", "main")
+        except RuntimeError:
+            subprocess.run(["git", "rebase", "--abort"], cwd=SITE, capture_output=True)
+            raise
+        git("push", "--quiet", "origin", "HEAD:main")
 
 
 def last_bot_commit():
+    """Ultima modifica pubblicata, se fatta dal bot."""
 
-    sync()
+    git("fetch", "--quiet", "origin")
 
-    author, subject, commit = git("log", "-1", "--format=%an%x09%s%x09%h").split("\t")
+    author, subject, commit = git("log", "-1", "--format=%an%x09%s%x09%h", "origin/main").split("\t")
 
     return (subject, commit) if author == BOT_AUTHOR else None
 
@@ -321,18 +334,22 @@ def with_author(message, by):
 
 
 def revert_last(by=None):
+    """Annulla l'ultima modifica pubblicata (non tocca quelle in attesa)."""
 
-    sync()
+    reset_to_origin()
 
-    subject = git("log", "-1", "--format=%s")
+    try:
+        subject = git("log", "-1", "--format=%s")
 
-    git("revert", "--no-edit", "HEAD")
-    message = f"Annullato da {by}: {subject}" if by else f"Annullato: {subject}"
+        git("revert", "--no-edit", "HEAD")
+        message = f"Annullato da {by}: {subject}" if by else f"Annullato: {subject}"
 
-    git("commit", "--quiet", "--amend", "-m", message)
-    git("push", "--quiet", "origin", "main")
+        git("commit", "--quiet", "--amend", "-m", message)
+        git("push", "--quiet", "origin", "HEAD:main")
 
-    return git("rev-parse", "--short", "HEAD")
+        return subject
+    finally:
+        rebuild()
 
 
 # File che non cambiano il sito visibile (codice del bot, script, configurazione)
@@ -346,10 +363,10 @@ def touches_site(files):
 def recent_changes(count=8):
     """Ultime modifiche al sito visibile, senza quelle solo tecniche."""
 
-    sync()
+    git("fetch", "--quiet", "origin")
 
     out = git(
-        "log", "-100",
+        "log", "-100", "origin/main",
         "--format=%x1e%cd%x09%an%x09%s",
         "--date=format:%d/%m %H:%M",
         "--name-only",
@@ -759,7 +776,7 @@ def screenshot(change):
 
 
 def preview(change):
-    """Applica la modifica, fa lo screenshot e la scarta."""
+    """Applica la modifica sopra quelle in attesa, fa lo screenshot e la scarta."""
 
     sync()
 
@@ -767,21 +784,242 @@ def preview(change):
         apply_change(change)
         return screenshot(change)
     finally:
-        sync()
-
-        # La sorgente copiata per l'anteprima non deve restare
-        if change["kind"] in ("event", "promo"):
-            for source in (SITE / "images-src" / "events").glob(f"{change['stem']}.*"):
-                source.unlink()
+        discard_local()
+        drop_source(change)
 
 
-def publish(change):
+# =========================================================
+# MODIFICHE DA PUBBLICARE
+# =========================================================
+#
+# Le modifiche fatte col bot si accumulano in una lista comune a tutti
+# gli utenti (state.json, "draft") e vanno sul sito insieme con
+# "Pubblica modifiche": un solo push, un commit per modifica.
+#
+# Nella copia del bot ogni modifica in attesa è un commit locale sopra
+# origin/main, così i pulsanti mostrano il sito come sarà dopo la
+# pubblicazione. Se GitHub cambia (es. modifica a mano), la lista viene
+# riapplicata sulla versione nuova; quelle non più applicabili si tolgono.
+#
+# Orario di stasera e Avviso sono urgenti: si pubblicano subito.
+
+IMMEDIATE_KINDS = ("tonight", "notice")
+
+# (origin/main, HEAD) dell'ultima ricostruzione: se non cambiano
+# non serve riapplicare la lista
+BUILT = None
+
+
+def read_draft():
+    return read_state().get("draft", [])
+
+
+def write_draft(draft):
+
+    state = read_state()
+    state["draft"] = draft
+
+    if not draft:
+        state.pop("draft_reminded", None)
+
+    write_state(state)
+
+
+def drop_source(change):
+    """Originale della locandina copiato in images-src: non deve restare."""
+
+    if change["kind"] in ("event", "promo"):
+        for source in (SITE / "images-src" / "events").glob(f"{change['stem']}.*"):
+            source.unlink()
+
+
+def mark_built():
+
+    global BUILT
+
+    BUILT = (git("rev-parse", "origin/main"), git("rev-parse", "HEAD"))
+
+
+def rebuild():
+    """
+    Copia del bot = GitHub + modifiche in attesa, riapplicate da capo.
+    Restituisce i messaggi di quelle non più applicabili (tolte dalla lista).
+    """
+
+    reset_to_origin()
+
+    draft = read_draft()
+    kept, skipped = [], []
+
+    for change in draft:
+        try:
+            message, paths = apply_change(change)
+            commit_local(with_author(message, change.get("by")), paths)
+            kept.append(change)
+        except Exception:
+            # Già così su GitHub, oppure la voce non c'è più
+            discard_local()
+            drop_source(change)
+            skipped.append(change["message"])
+
+    if skipped:
+        write_draft(kept)
+
+        # Da far vedere in 🚀 Pubblica modifiche, anche se la
+        # ricostruzione è partita da un'altra schermata
+        state = read_state()
+        state["draft_skipped"] = state.get("draft_skipped", []) + skipped
+        write_state(state)
+
+    mark_built()
+
+    return skipped
+
+
+def pop_skipped():
+    """Modifiche tolte dalla lista perché non più applicabili (una volta sola)."""
+
+    state = read_state()
+    skipped = state.pop("draft_skipped", [])
+
+    if skipped:
+        write_state(state)
+
+    return skipped
+
+
+def sync():
+    """Prepara la copia del bot; la ricostruisce solo se qualcosa è cambiato."""
+
+    git("fetch", "--quiet", "origin")
+
+    current = (git("rev-parse", "origin/main"), git("rev-parse", "HEAD"))
+
+    if current == BUILT and not git("status", "--porcelain"):
+        return []
+
+    return rebuild()
+
+
+def add_to_draft(change):
+    """Applica la modifica nella copia del bot e la mette in lista."""
 
     sync()
 
-    message, paths = apply_change(change)
+    try:
+        message, paths = apply_change(change)
+        commit_local(with_author(message, change.get("by")), paths)
+    except Exception:
+        discard_local()
+        raise
 
-    return commit_and_push(with_author(message, change.get("by")), paths), paths
+    entry = {k: v for k, v in change.items() if k != "back"}
+    entry["message"] = message
+    entry["added"] = datetime.now(TZ).isoformat(timespec="seconds")
+
+    draft = read_draft() + [entry]
+    write_draft(draft)
+
+    mark_built()
+
+    return message, len(draft)
+
+
+def remove_from_draft(index, added):
+    """Toglie una modifica; `added` evita di togliere quella sbagliata
+    se nel frattempo la lista è cambiata."""
+
+    draft = read_draft()
+
+    if not 0 <= index < len(draft) or draft[index]["added"] != added:
+        return None
+
+    removed = draft.pop(index)
+
+    write_draft(draft)
+    drop_source(removed)
+    rebuild()
+
+    return removed["message"]
+
+
+def reminder_due(after):
+    """
+    Modifiche in attesa da ricordare: l'ultima aggiunta è di almeno
+    `after` fa e da allora non è partito un promemoria.
+    """
+
+    state = read_state()
+    draft = state.get("draft") or []
+
+    if not draft:
+        return None
+
+    last = max(datetime.fromisoformat(c["added"]) for c in draft)
+    reminded = state.get("draft_reminded")
+
+    if datetime.now(TZ) - last < after:
+        return None
+
+    if reminded and datetime.fromisoformat(reminded) >= last:
+        return None
+
+    state["draft_reminded"] = datetime.now(TZ).isoformat(timespec="seconds")
+    write_state(state)
+
+    return draft
+
+
+def clear_draft():
+
+    for change in read_draft():
+        drop_source(change)
+
+    write_draft([])
+    rebuild()
+
+
+def publish_draft():
+    """
+    Pubblica tutta la lista con un solo push. Restituisce (modifiche
+    pubblicate, contenuto atteso dei JSON toccati, modifiche saltate).
+    """
+
+    skipped = rebuild()
+    draft = read_draft()
+
+    if not draft:
+        return [], [], skipped
+
+    files = git("diff", "--name-only", "origin/main", "HEAD").splitlines()
+
+    push()
+
+    write_draft([])
+    mark_built()
+
+    return draft, expected_json(files), skipped
+
+
+def expected_json(files):
+    """Contenuto dei JSON pubblicati, per controllare quando sono online."""
+    return {f: read_json(f) for f in files if f.endswith(".json")}
+
+
+def publish_now(change):
+    """Orario di stasera e Avviso: subito sul sito, senza la lista in attesa."""
+
+    reset_to_origin()
+
+    try:
+        message, paths = apply_change(change)
+        commit_local(with_author(message, change.get("by")), paths)
+        push()
+        expected = expected_json(paths)
+    finally:
+        rebuild()
+
+    return message, expected
 
 
 def fetch_live(path):

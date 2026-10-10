@@ -2,12 +2,15 @@
 """
 Bot Telegram per aggiornare memphisristopub.it senza toccare il codice.
 
-Gira su una copia dedicata del repository (~/memphis-bot/site) e per ogni
-modifica: aggiorna i file, mostra un'anteprima, e dopo la conferma fa
-commit + push. GitHub Pages pubblica in 1-2 minuti.
+Gira su una copia dedicata del repository (~/memphis-bot/site). Le
+modifiche si accumulano in una lista comune e vanno sul sito tutte
+insieme con "🚀 Pubblica modifiche" (un solo push): GitHub Pages
+pubblica in 1-2 minuti. Le locandine hanno l'anteprima con screenshot;
+Orario di stasera e Avviso si pubblicano subito.
 
 Si usa con i pulsanti: tastiera fissa in basso (Locandina, Eventi,
-Promozioni, Menu, Avviso, Altro) e menu a pulsanti dentro i messaggi.
+Promozioni, Menu, Orario, Avviso, Altro, Pubblica) e menu a pulsanti
+dentro i messaggi.
 I comandi scritti (/prezzo, /avviso...) restano come scorciatoie.
 
 Configurazione in ~/memphis-bot/.env:
@@ -88,6 +91,10 @@ RUNNING_VERSION = core.head()
 # Ogni quanto controllare se il sito è stato modificato da fuori
 SITE_CHECK_SECONDS = 180
 
+# Promemoria a tutti se ci sono modifiche in attesa da almeno 2 ore
+REMIND_AFTER = timedelta(hours=2)
+REMIND_CHECK_SECONDS = 600
+
 
 # =========================================================
 # TASTIERE
@@ -100,9 +107,10 @@ B_MENU = "🍔 Menu"
 B_NOTICE = "📢 Avviso"
 B_TONIGHT = "🕑 Orario di stasera"
 B_MORE = "⚙️ Altro"
+B_PUBLISH = "🚀 Pubblica modifiche"
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_TONIGHT, B_NOTICE], [B_MORE]],
+    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_TONIGHT, B_NOTICE], [B_MORE, B_PUBLISH]],
     resize_keyboard=True,
     is_persistent=True,
 )
@@ -173,22 +181,45 @@ async def in_repo(func, *args):
 
 
 
+# Solo le locandine (foto caricata) hanno l'anteprima con screenshot
+PREVIEW_KINDS = ("event", "promo")
+
+
 async def propose(update, context, change, summary, back=None, extra=None):
-    """Anteprima + riepilogo, in attesa di conferma."""
+    """
+    Locandine: anteprima + conferma, poi in lista.
+    Orario di stasera e Avviso: conferma, poi subito sul sito.
+    Tutto il resto va subito in lista (si può togliere da 🚀 Pubblica).
+    """
 
     message = update.effective_message
 
     change["back"] = back
     context.user_data.pop("awaiting", None)
 
-    # Ogni anteprima ha il suo id: i pulsanti di una vecchia
-    # anteprima non possono pubblicare la modifica di un'altra
+    kind = change["kind"]
+
+    if kind not in PREVIEW_KINDS and kind not in core.IMMEDIATE_KINDS:
+        change["by"] = update.effective_user.first_name
+        return await add_change(update, context, change, summary)
+
+    # Ogni conferma ha il suo id: i pulsanti di una vecchia
+    # conferma non possono pubblicare la modifica di un'altra
     pending = context.user_data.setdefault("pending", {})
     context.user_data["next_id"] = pid = context.user_data.get("next_id", 0) + 1
-    pending[str(pid)] = change
+    pending[str(pid)] = {"change": change, "summary": summary}
 
     for old in sorted(pending, key=int)[:-5]:
         del pending[old]
+
+    if kind in core.IMMEDIATE_KINDS:
+        return await message.reply_text(
+            f"{summary}\n\nPubblico subito sul sito?",
+            reply_markup=keyboard(
+                [("✅ Pubblica subito", f"publish:{pid}"), ("❌ Annulla", f"discard:{pid}")],
+            ),
+            parse_mode="HTML",
+        )
 
     waiting = await message.reply_text("⏳ Preparo l'anteprima…")
 
@@ -203,11 +234,36 @@ async def propose(update, context, change, summary, back=None, extra=None):
 
     await message.reply_photo(
         photo=image,
-        caption=f"{summary}\n\nPubblico sul sito?",
+        caption=f"{summary}\n\nLa aggiungo alle modifiche da pubblicare?",
         reply_markup=keyboard(
-            [("✅ Pubblica", f"publish:{pid}"), ("❌ Annulla", f"discard:{pid}")],
+            [("✅ Aggiungi", f"publish:{pid}"), ("❌ Annulla", f"discard:{pid}")],
             [(label, f"{action}:{pid}") for label, action in (extra or [])],
         ),
+        parse_mode="HTML",
+    )
+
+
+async def add_change(update, context, change, summary):
+    """Mette la modifica nella lista da pubblicare."""
+
+    reply = update.effective_message.reply_text
+
+    try:
+        _, count = await in_repo(core.add_to_draft, change)
+    except core.AlreadyPublished:
+        return await reply("ℹ️ È già così, non c'è niente da cambiare.")
+    except Exception as error:
+        log.exception("Modifica non riuscita")
+        return await reply(f"⚠️ Modifica non riuscita: {error}")
+
+    back = change.get("back")
+    waiting = "1 modifica in attesa" if count == 1 else f"{count} modifiche in attesa"
+
+    await reply(
+        f"📝 {summary}\n\n"
+        f"Aggiunta alle modifiche da pubblicare ({waiting}).\n"
+        "<b>Non è ancora sul sito</b>: quando hai finito premi 🚀 Pubblica modifiche.",
+        reply_markup=keyboard([back] if back else None, [("🚀 Pubblica modifiche", "pub")]),
         parse_mode="HTML",
     )
 
@@ -218,24 +274,27 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, action,
 
     await query.edit_message_reply_markup(reply_markup=None)
 
-    change = context.user_data.get("pending", {}).pop(pid, None)
+    entry = context.user_data.get("pending", {}).pop(pid, None)
 
-    if action == "publishfeat" and change:
+    if action == "discard" or entry is None:
+        text = "Annullato, non ho cambiato nulla." if entry else "Questa conferma è scaduta."
+        return await query.message.reply_text(text)
+
+    change, summary = entry["change"], entry["summary"]
+    change["by"] = query.from_user.first_name
+
+    if action == "publishfeat":
         change["featured"] = True
 
-    if change:
-        change["by"] = query.from_user.first_name
-
-    if action == "discard" or change is None:
-        text = "Annullato, non ho pubblicato nulla." if change else "Questa anteprima è scaduta."
-        return await query.message.reply_text(text)
+    if change["kind"] not in core.IMMEDIATE_KINDS:
+        return await add_change(update, context, change, summary)
 
     status = await query.message.reply_text("⏳ Pubblico…")
 
     try:
-        commit, paths = await in_repo(core.publish, change)
+        message, expected = await in_repo(core.publish_now, change)
     except core.AlreadyPublished:
-        return await status.edit_text("✅ Questa modifica è già sul sito, non serve ripubblicarla.")
+        return await status.edit_text("✅ È già così sul sito, non serve ripubblicare.")
     except Exception as error:
         log.exception("Pubblicazione fallita")
         return await status.edit_text(f"⚠️ Pubblicazione non riuscita: {error}")
@@ -247,22 +306,28 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, action,
         reply_markup=keyboard([back]) if back else None,
     )
 
-    watched = next(p for p in paths if p.endswith(".json"))
-    expected = json.loads((SITE / watched).read_text())
+    await notify_all(
+        context.bot,
+        f"✏️ <b>{esc(change['by'])} ha modificato il sito</b>\n{esc(message)}\n{SITE_URL}",
+        exclude=query.from_user.id,
+    )
 
     context.application.create_task(
-        wait_until_live(context, query.message.chat_id, watched, expected)
+        wait_until_live(context, query.message.chat_id, expected)
     )
 
 
-async def wait_until_live(context, chat_id, path, expected):
-    """Controlla il sito finché il file pubblicato non è aggiornato."""
+async def wait_until_live(context, chat_id, expected):
+    """Controlla il sito finché i file pubblicati ({percorso: contenuto}) non sono aggiornati."""
+
+    def all_live():
+        return all(core.fetch_live(path) == data for path, data in expected.items())
 
     for _ in range(36):
 
         await asyncio.sleep(10)
 
-        if await asyncio.to_thread(core.fetch_live, path) == expected:
+        if await asyncio.to_thread(all_live):
             return await context.bot.send_message(
                 chat_id, f"🌐 È online: {SITE_URL}",
                 disable_web_page_preview=True,
@@ -611,7 +676,7 @@ async def finish_draft(update, context):
                 f"\n\n📋 Comparirà in «In programma». "
                 f"In evidenza resta «{esc(shown['title'])}»."
             )
-            extra = [("⭐ Pubblica in evidenza", "publishfeat")]
+            extra = [("⭐ Aggiungi in evidenza", "publishfeat")]
 
         back = ("⬅️ Eventi", "list:events")
 
@@ -1310,9 +1375,10 @@ Usa i pulsanti in basso 👇
 🍔 <b>Menu</b> — categoria → voce → prezzo, nome, descrizione, homepage, nascondi, elimina. ➕ per aggiungere.
 🕑 <b>Orario di stasera</b> — chiudete prima o restate chiusi una sera, senza cambiare gli orari normali.
 📢 <b>Avviso</b> — barra in fondo al sito per comunicazioni veloci.
-⚙️ <b>Altro</b> — annulla l'ultima modifica, storico.
+⚙️ <b>Altro</b> — annulla l'ultima modifica pubblicata, storico.
+🚀 <b>Pubblica modifiche</b> — vedi la lista delle modifiche in attesa e le metti sul sito tutte insieme.
 
-Niente viene pubblicato senza il tuo ✅.
+Le modifiche si accumulano in una lista comune e vanno sul sito solo con 🚀 Pubblica modifiche. Orario di stasera e Avviso invece vanno online subito, dopo il tuo ✅.
 
 <b>Scorciatoie</b> per chi va di fretta:
 • didascalia della foto: <code>Halloween 31/10 19:30</code> o <code>promo Ribs fino 30/11</code>
@@ -1325,7 +1391,7 @@ async def more_screen(update, context):
     context.user_data.pop("awaiting", None)
 
     await respond(update, "⚙️ <b>Altro</b>", keyboard(
-        [("↩️ Annulla l'ultima modifica", "more:undo")],
+        [("↩️ Annulla l'ultima modifica pubblicata", "more:undo")],
         [("🕑 Ultime modifiche", "more:log")],
         [("❓ Come si usa", "more:help")],
     ))
@@ -1370,7 +1436,7 @@ async def more_action(update, context, action):
 
         return await respond(
             update,
-            f"↩️ Annullo l'ultima modifica?\n«{esc(last[0])}»",
+            f"↩️ Annullo l'ultima modifica pubblicata?\n«{esc(last[0])}»",
             keyboard([("Sì, annulla", "undo:yes"), ("No", "more")]),
         )
 
@@ -1379,13 +1445,155 @@ async def undo_confirmed(update, context):
 
     await respond(update, "⏳ Annullo…")
 
+    user = update.effective_user
+
     try:
-        await in_repo(core.revert_last, update.effective_user.first_name)
+        subject = await in_repo(core.revert_last, user.first_name)
     except Exception as error:
         log.exception("Annulla fallito")
         return await respond(update, f"⚠️ Non riuscito: {error}")
 
     await respond(update, "↩️ Annullato. Il sito torna com'era tra 1-2 minuti.")
+
+    await notify_all(
+        context.bot,
+        f"↩️ <b>{esc(user.first_name)} ha annullato una modifica</b>\n{esc(subject)}\n{SITE_URL}",
+        exclude=user.id,
+    )
+
+
+# =========================================================
+# PUBBLICA MODIFICHE (lista comune in attesa)
+# =========================================================
+
+def draft_lines(draft):
+    return "\n".join(
+        f"{n}. {esc(c['message'])} <i>({esc(c.get('by') or '?')})</i>"
+        for n, c in enumerate(draft, 1)
+    )
+
+
+def skipped_text(skipped):
+
+    if not skipped:
+        return ""
+
+    return (
+        "⚠️ Tolte dalla lista perché non più applicabili "
+        "(già così sul sito o voce non più presente):\n"
+        + "\n".join(f"• {esc(m)}" for m in skipped)
+        + "\n\n"
+    )
+
+
+async def publish_screen(update, context):
+
+    context.user_data.pop("awaiting", None)
+
+    await in_repo(core.sync)
+
+    skipped = await in_repo(core.pop_skipped)
+    draft = core.read_draft()
+
+    if not draft:
+        return await respond(
+            update, skipped_text(skipped) + "🚀 Nessuna modifica da pubblicare.",
+        )
+
+    await respond(
+        update,
+        skipped_text(skipped)
+        + "📝 <b>Modifiche da pubblicare</b>\n\n"
+        + draft_lines(draft),
+        keyboard(
+            [("✅ Pubblica tutto", "pub:go")],
+            [("🗑️ Togli una modifica", "pub:pick")],
+            [("❌ Scarta tutto", "pub:clear")],
+        ),
+    )
+
+
+async def publish_action(update, context, action):
+
+    if action == "pick":
+
+        draft = core.read_draft()
+
+        if not draft:
+            return await publish_screen(update, context)
+
+        rows = [
+            [(f"🗑️ {n}. {c['message'][:40]}", f"pub:rm:{n - 1}:{c['added']}")]
+            for n, c in enumerate(draft, 1)
+        ]
+
+        return await respond(
+            update, "Quale modifica tolgo dalla lista?",
+            keyboard(*rows, [("⬅️ Indietro", "pub")]),
+        )
+
+    if action.startswith("rm:"):
+
+        _, index, added = action.split(":", 2)
+
+        removed = await in_repo(core.remove_from_draft, int(index), added)
+
+        if removed is None:
+            return await respond(
+                update, "La lista è cambiata nel frattempo, riprova.",
+                keyboard([("⬅️ Indietro", "pub")]),
+            )
+
+        return await publish_screen(update, context)
+
+    if action == "clear":
+        return await respond(
+            update, "❌ Scarto <b>tutte</b> le modifiche in attesa? Non andranno sul sito.",
+            keyboard([("Sì, scarta tutto", "pub:clearyes"), ("No", "pub")]),
+        )
+
+    if action == "clearyes":
+        await in_repo(core.clear_draft)
+        return await respond(update, "❌ Modifiche in attesa scartate. Il sito resta com'è.")
+
+    if action == "go":
+
+        user = update.effective_user
+
+        await respond(update, "⏳ Pubblico…")
+
+        try:
+            draft, expected, _ = await in_repo(core.publish_draft)
+        except Exception as error:
+            log.exception("Pubblicazione fallita")
+            return await respond(update, f"⚠️ Pubblicazione non riuscita: {error}")
+
+        skipped = await in_repo(core.pop_skipped)
+
+        if not draft:
+            return await respond(
+                update, skipped_text(skipped) + "🚀 Nessuna modifica da pubblicare.",
+            )
+
+        count = "1 modifica" if len(draft) == 1 else f"{len(draft)} modifiche"
+
+        await respond(
+            update,
+            skipped_text(skipped)
+            + f"✅ Pubblicato ({count}):\n{draft_lines(draft)}\n\n"
+            "Sul sito sarà visibile tra 1-2 minuti: ti avviso io.",
+        )
+
+        await notify_all(
+            context.bot,
+            f"🚀 <b>{esc(user.first_name)} ha pubblicato {count}</b>\n"
+            f"{draft_lines(draft)}\n{SITE_URL}",
+            exclude=user.id,
+        )
+
+        context.application.create_task(
+            wait_until_live(context, update.effective_chat.id, expected)
+        )
 
 
 # =========================================================
@@ -1516,6 +1724,7 @@ MAIN_ACTIONS = {
     B_NOTICE: notice_screen,
     B_TONIGHT: tonight_screen,
     B_MORE: more_screen,
+    B_PUBLISH: publish_screen,
 }
 
 
@@ -1612,6 +1821,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "undo:yes":
         return await undo_confirmed(update, context)
 
+    if data == "pub":
+        return await publish_screen(update, context)
+
+    if head == "pub":
+        return await publish_action(update, context, rest)
+
     log.warning("Pulsante sconosciuto: %s", data)
 
 
@@ -1630,12 +1845,13 @@ async def on_error(update, context: ContextTypes.DEFAULT_TYPE):
 # NOTIFICHE: bot aggiornato, sito modificato da fuori
 # =========================================================
 
-async def notify_all(bot, text):
+async def notify_all(bot, text, exclude=None, markup=None):
 
-    for user_id in ALLOWED:
+    for user_id in ALLOWED - {exclude}:
         try:
             await bot.send_message(
                 user_id, text, parse_mode="HTML", disable_web_page_preview=True,
+                reply_markup=markup,
             )
         except Exception:
             log.warning("Notifica non consegnata a %s", user_id)
@@ -1703,6 +1919,28 @@ async def check_site(context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def remind_draft(context: ContextTypes.DEFAULT_TYPE):
+    """Promemoria a tutti: modifiche in attesa da un po' e non pubblicate."""
+
+    try:
+        draft = await in_repo(core.reminder_due, REMIND_AFTER)
+    except Exception:
+        log.exception("Controllo promemoria fallito")
+        return
+
+    if not draft:
+        return
+
+    count = "1 modifica" if len(draft) == 1 else f"{len(draft)} modifiche"
+
+    await notify_all(
+        context.bot,
+        f"⏰ <b>{count} in attesa, non ancora sul sito</b>\n{draft_lines(draft)}\n\n"
+        "Per metterle online premi 🚀 Pubblica modifiche.",
+        markup=keyboard([("🚀 Pubblica modifiche", "pub")]),
+    )
+
+
 async def post_init(app: Application):
 
     await app.bot.set_my_commands([
@@ -1712,6 +1950,7 @@ async def post_init(app: Application):
         BotCommand("promozioni", "Promozioni sul sito"),
         BotCommand("avviso", "Avviso in fondo al sito"),
         BotCommand("stasera", "Orario di stasera (chiusura anticipata)"),
+        BotCommand("pubblica", "Modifiche in attesa da pubblicare"),
         BotCommand("aiuto", "Come si usa"),
         BotCommand("stop", "Interrompe la domanda in corso"),
     ])
@@ -1724,6 +1963,7 @@ async def post_init(app: Application):
 
     # Il primo controllo segnala anche le modifiche fatte mentre il bot era spento
     app.job_queue.run_repeating(check_site, interval=SITE_CHECK_SECONDS, first=20)
+    app.job_queue.run_repeating(remind_draft, interval=REMIND_CHECK_SECONDS, first=60)
 
 
 def main():
@@ -1748,6 +1988,7 @@ def main():
         "promozioni": lambda u, c: entries_screen(u, c, promos=True),
         "avviso": cmd_notice,
         "stasera": tonight_screen,
+        "pubblica": publish_screen,
         "annulla": lambda u, c: more_action(u, c, "undo"),
         "stato": lambda u, c: more_action(u, c, "log"),
         "prezzo": cmd_price,
