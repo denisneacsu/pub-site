@@ -78,7 +78,7 @@
                         { "name": "Coca Malibu", "price": 7 },
                         { "name": "Caipiroska", "price": 7 },
                         { "name": "Mojito", "price": 8 },
-                        { "name": "Margarita", "price": 10 },
+                        { "name": "Margarita", "price": 8 },
                         { "name": "Moscow Mule", "price": 10, "featured": true },
                         { "name": "Long Island Iced Tea", "price": 10 },
                         { "name": "Vodka Sour", "price": 10 }
