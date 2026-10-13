@@ -81,7 +81,8 @@
                         { "name": "Margarita", "price": 8 },
                         { "name": "Moscow Mule", "price": 10, "featured": true },
                         { "name": "Long Island Iced Tea", "price": 10 },
-                        { "name": "Vodka Sour", "price": 8 }
+                        { "name": "Vodka Sour", "price": 8 },
+                        { "name": "ArFe", "description": "cocktail della casa", "price": 8 }
                     ]
                 },
                 {
