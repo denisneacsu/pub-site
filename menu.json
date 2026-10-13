@@ -55,11 +55,11 @@
                     "title": "Birre",
                     "columns": ["Piccola", "Media"],
                     "items": [
-                        { "name": "Stella Artois", "prices": [3.5, 6], "featured": true },
-                        { "name": "Panaché", "description": "Stella Artois con gazzosa o Sprite.", "prices": [3.5, 6] },
-                        { "name": "Tennent's", "prices": [4, null], "featured": true },
-                        { "name": "Corona", "prices": [5, null] },
-                        { "name": "Ceres", "prices": [4, null] }
+                        { "group": "Alla spina", "name": "Stella Artois", "prices": [3.5, 6], "featured": true },
+                        { "group": "Alla spina", "name": "Panaché", "description": "Stella Artois con gazzosa o Sprite.", "prices": [3.5, 6] },
+                        { "group": "In bottiglia", "name": "Tennent's", "price": 4, "featured": true },
+                        { "group": "In bottiglia", "name": "Corona", "price": 5 },
+                        { "group": "In bottiglia", "name": "Ceres", "price": 4 }
                     ]
                 },
                 {
@@ -145,6 +145,19 @@
                         { "name": "Imperial", "price": 5 },
                         { "name": "Kraken", "price": 5 },
                         { "name": "Nikka Super", "price": 10 }
+                    ]
+                },
+                {
+                    "id": "shot",
+                    "title": "Shot",
+                    "items": [
+                        { "name": "Vodka Menta", "description": "Keglevich", "price": 2.5 },
+                        { "name": "Vodka Fragola", "description": "Keglevich", "price": 2.5 },
+                        { "name": "Vodka Liscia", "description": "Keglevich", "price": 2.5 },
+                        { "name": "Vodka Pesca", "description": "Keglevich", "price": 2.5 },
+                        { "name": "Vodka Belvedere", "price": 2.5 },
+                        { "name": "Vodka Beluga", "price": 2.5 },
+                        { "name": "Tequila", "price": 2.5 }
                     ]
                 },
                 {

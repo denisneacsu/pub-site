@@ -171,7 +171,11 @@ document.addEventListener("DOMContentLoaded", () => {
             : "";
 
 
-        if (columns) {
+        /*
+         * Una voce con un prezzo solo (es. birre in bottiglia)
+         * usa la riga normale anche in una categoria a colonne.
+         */
+        if (columns && item.prices) {
 
             const prices = columns
                 .map((label, index) => `

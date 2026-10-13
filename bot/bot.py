@@ -1096,7 +1096,8 @@ async def ask_price(update, context, step, ctx, item=None):
         prompt = (
             f"💶 Scrivi i <b>{len(columns)} prezzi</b> ({' e '.join(columns)}), "
             f"separati da spazio. Es: <code>{example}</code>\n"
-            "Usa <code>-</code> se una misura non c'è."
+            "Usa <code>-</code> se una misura non c'è, "
+            "oppure scrivi un prezzo solo (es. birre in bottiglia)."
         )
     else:
         prompt = "💶 Scrivi il <b>prezzo</b>. Es: <code>6,50</code>"
@@ -1113,26 +1114,47 @@ async def handle_price(update, context, step, ctx, raw):
     prices = core.parse_prices(tokens)
 
     columns = ctx.get("columns")
-    expected = len(columns) if columns else 1
+    expected = {len(columns), 1} if columns else {1}
 
-    if tokens or len(prices) != expected:
+    if tokens or len(prices) not in expected:
         problem = (
-            f"Mi servono {expected} prezzi ({' e '.join(columns)}), es. 4 7."
+            f"Mi servono {len(columns)} prezzi ({' e '.join(columns)}), es. 4 7, "
+            "oppure un prezzo solo."
             if columns else "Non ho capito il prezzo, es. 6,50."
         )
         return await update.effective_message.reply_text(
             f"{problem} Riprova, oppure premi ✖️ Annulla."
         )
 
-    value = {"prices": prices} if columns else {"price": prices[0]}
+    # In una categoria a colonne un prezzo solo (es. birre in
+    # bottiglia) diventa "price"; la chiave dell'altro tipo si toglie.
+    if columns and len(prices) == len(columns) > 1:
+        value = {"prices": prices, "price": None}
+    elif columns:
+        value = {"price": prices[0], "prices": None}
+    else:
+        value = {"price": prices[0]}
     shown = " / ".join(format_price(p) for p in prices)
 
     if step == "add_price":
 
-        item = {"name": ctx["item"]["name"]}
+        item = {}
+
+        # Nelle categorie a sottosezioni (es. birre alla spina /
+        # in bottiglia) la voce va nella sottosezione che ha lo
+        # stesso tipo di prezzo, se ce n'è una sola.
+        kind = "prices" if "prices" in value and value["prices"] else "price"
+        groups = {
+            i["group"] for i in get_items(ctx["category"])
+            if i.get("group") and kind in i
+        }
+        if len(groups) == 1:
+            item["group"] = groups.pop()
+
+        item["name"] = ctx["item"]["name"]
         if ctx["item"].get("description"):
             item["description"] = ctx["item"]["description"]
-        item.update(value)
+        item.update({k: v for k, v in value.items() if v is not None})
 
         category = next(c for c in core.categories() if c["id"] == ctx["category"])
 
