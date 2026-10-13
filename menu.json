@@ -151,13 +151,13 @@
                     "id": "shot",
                     "title": "Shot",
                     "items": [
-                        { "name": "Vodka Menta", "description": "Keglevich", "price": 2.5 },
-                        { "name": "Vodka Fragola", "description": "Keglevich", "price": 2.5 },
-                        { "name": "Vodka Liscia", "description": "Keglevich", "price": 2.5 },
-                        { "name": "Vodka Pesca", "description": "Keglevich", "price": 2.5 },
-                        { "name": "Vodka Belvedere", "price": 2.5 },
-                        { "name": "Vodka Beluga", "price": 2.5 },
-                        { "name": "Tequila", "price": 2.5 }
+                        { "name": "Vodka Menta", "description": "Keglevich", "price": 3 },
+                        { "name": "Vodka Fragola", "description": "Keglevich", "price": 3 },
+                        { "name": "Vodka Liscia", "description": "Keglevich", "price": 3 },
+                        { "name": "Vodka Pesca", "description": "Keglevich", "price": 3 },
+                        { "name": "Vodka Belvedere", "price": 3 },
+                        { "name": "Vodka Beluga", "price": 3 },
+                        { "name": "Tequila", "price": 3 }
                     ]
                 },
                 {
