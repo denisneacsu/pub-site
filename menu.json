@@ -70,7 +70,7 @@
                     "items": [
                         { "name": "Spritz", "price": 7, "featured": true },
                         { "name": "Spritz Campari", "price": 7 },
-                        { "name": "Spritz Sarti Rosa", "price": 6 },
+                        { "name": "Spritz Sarti Rosa", "price": 6, "available": false },
                         { "name": "Spritz Cynar", "price": 6 },
                         { "name": "Negroni", "price": 7 },
                         { "name": "Negroni Sbagliato", "price": 7 },
