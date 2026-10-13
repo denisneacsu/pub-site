@@ -122,7 +122,7 @@
                         { "name": "Coca-Cola", "price": 2.5, "description": "Lattina" },
                         { "name": "Coca-Cola Zero", "price": 2.5, "description": "Lattina" },
                         { "name": "Aranciata", "price": 2.5 },
-                        { "name": "Acqua tonica", "price": 3.5 },
+                        { "name": "Acqua tonica", "price": 2.5 },
                         { "name": "Schweppes", "price": 3.5 },
                         { "name": "Red Bull", "price": 3.5 },
                         { "name": "Tè limone / pesca", "price": 2.5 },
