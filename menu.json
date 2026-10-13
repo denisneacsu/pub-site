@@ -75,7 +75,7 @@
                         { "name": "Negroni", "price": 7 },
                         { "name": "Negroni Sbagliato", "price": 7 },
                         { "name": "Americano", "price": 7 },
-                        { "name": "Coca Malibu", "price": 7 },
+                        { "name": "Coca Malibu", "price": 7.5 },
                         { "name": "Caipiroska", "price": 7 },
                         { "name": "Mojito", "price": 8 },
                         { "name": "Margarita", "price": 8 },
