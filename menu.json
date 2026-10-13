@@ -145,8 +145,7 @@
                         { "name": "Grappa bianca", "price": 4 },
                         { "name": "Grappa gialla", "price": 4 },
                         { "name": "Imperial", "price": 5 },
-                        { "name": "Kraken", "price": 5 },
-                        { "name": "Nikka Super", "price": 10 }
+                        { "name": "Kraken", "price": 5 }
                     ]
                 },
                 {
