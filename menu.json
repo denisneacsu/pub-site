@@ -120,7 +120,7 @@
                     "title": "Bibite",
                     "items": [
                         { "name": "Coca-Cola", "price": 2.5, "description": "Lattina" },
-                        { "name": "Coca-Cola Zero", "price": 3.5 },
+                        { "name": "Coca-Cola Zero", "price": 2.5 },
                         { "name": "Aranciata", "price": 3.5 },
                         { "name": "Acqua tonica", "price": 3.5 },
                         { "name": "Schweppes", "price": 3.5 },
