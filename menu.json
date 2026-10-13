@@ -60,7 +60,8 @@
                         { "group": "In bottiglia", "name": "Tennent's", "price": 4, "featured": true },
                         { "group": "In bottiglia", "name": "Corona", "price": 5 },
                         { "group": "In bottiglia", "name": "Ceres", "price": 4 },
-                        { "group": "In bottiglia", "name": "Leffe rouge", "price": 5.5 }
+                        { "group": "In bottiglia", "name": "Leffe rouge", "price": 5.5 },
+                        { "group": "In bottiglia", "name": "Leffe ambrèe", "price": 5.5 }
                     ]
                 },
                 {
