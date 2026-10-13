@@ -128,7 +128,7 @@
                         { "name": "Tè limone / pesca", "price": 2.5 },
                         { "name": "Fanta", "price": 2.5 },
                         { "name": "Sprite", "price": 2.5 },
-                        { "name": "Acqua", "description": "0,5 l", "price": 1.2 },
+                        { "name": "Acqua", "description": "0,5 l", "price": 1.5 },
                         { "name": "Caffè", "price": 1.5 }
                     ]
                 },
