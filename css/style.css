@@ -1281,7 +1281,7 @@ p {
 .beer-item strong {
     display: block;
 
-    font-size: 0.94rem;
+    font-size: 1.06rem;
 }
 
 
@@ -1290,7 +1290,7 @@ p {
 
     color: var(--text);
 
-    font-size: 0.9rem;
+    font-size: 1rem;
     font-weight: 700;
 }
 
@@ -1302,9 +1302,9 @@ p {
 
     margin-top: 4px;
 
-    color: var(--text-muted);
+    color: var(--text-soft);
 
-    font-size: 0.8rem;
+    font-size: 0.9rem;
 
     line-height: 1.5;
 }
@@ -1319,7 +1319,7 @@ p {
 
     color: var(--text);
 
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     font-weight: 700;
 }
 
@@ -1327,9 +1327,9 @@ p {
 .menu-description {
     margin-top: 12px;
 
-    color: var(--text-muted);
+    color: var(--text-soft);
 
-    font-size: 0.8rem;
+    font-size: 0.9rem;
 }
 
 
@@ -1531,9 +1531,9 @@ p {
 
 
 .menu-columns-head span {
-    color: var(--text-muted);
+    color: var(--text-soft);
 
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 700;
 
     letter-spacing: 0.08em;
@@ -1546,9 +1546,9 @@ p {
 
     margin-top: 4px;
 
-    color: var(--text-muted);
+    color: var(--text-soft);
 
-    font-size: 0.8rem;
+    font-size: 0.9rem;
 
     line-height: 1.5;
 }
@@ -1559,7 +1559,7 @@ p {
 
     color: var(--accent-light);
 
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-weight: 700;
 
     letter-spacing: 0.1em;
@@ -2415,17 +2415,18 @@ a:focus-visible {
 
     .menu-item strong,
     .beer-item strong {
-        font-size: 0.88rem;
+        font-size: 1rem;
     }
 
 
-    .menu-item small {
-        font-size: 0.76rem;
+    .menu-item small,
+    .beer-item small {
+        font-size: 0.86rem;
     }
 
 
     .beer-prices {
-        font-size: 0.78rem;
+        font-size: 0.9rem;
     }
 
 
@@ -2437,7 +2438,7 @@ a:focus-visible {
 
     .menu-columns-head span,
     .beer-prices span {
-        width: 62px;
+        width: 66px;
     }
 
 
