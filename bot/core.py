@@ -15,6 +15,7 @@ import sys
 import threading
 import unicodedata
 from datetime import date, datetime, timedelta
+from html import escape as html_escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import urlopen
@@ -216,6 +217,29 @@ def read_hours():
         return {"exceptions": []}
 
 
+def upcoming_closures():
+    """Serate chiuse già programmate dopo quella in corso."""
+
+    after = service_date().isoformat()
+
+    return sorted(
+        date.fromisoformat(e["date"])
+        for e in read_hours().get("exceptions", [])
+        if e.get("closed") and e["date"] > after
+    )
+
+
+def notice_for(day):
+    """L'avviso attuale è quello automatico di quella serata?"""
+
+    try:
+        expires = read_json("notice.json").get("expires", "")
+    except (OSError, ValueError):
+        return False
+
+    return expires.startswith((day + timedelta(days=1)).isoformat())
+
+
 def get_exception(day):
     return next(
         (e for e in read_hours().get("exceptions", []) if e["date"] == day.isoformat()),
@@ -245,6 +269,83 @@ def tonight_notice(change):
     if change.get("closed"):
         return "Stasera il locale è chiuso. Ci scusiamo per il disagio!"
     return f"Stasera chiudiamo alle {change['closes']}."
+
+
+# =========================================================
+# STORIA "CHIUSO" (Instagram)
+# =========================================================
+
+# Fuori dal repo: il template non va su GitHub
+TEMPLATES = BOT_HOME / "templates"
+CLOSED_TEMPLATE = TEMPLATES / "chiusura.html"
+
+DAY_NAMES = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
+MONTH_NAMES = [
+    "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+    "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+]
+
+
+def long_date(day):
+    return f"{DAY_NAMES[day.weekday()]} {day.day} {MONTH_NAMES[day.month - 1]}"
+
+
+def next_open_day(day):
+    """Prima serata aperta dopo `day` (salta lunedì e serate chiuse)."""
+
+    for offset in range(1, 15):
+        candidate = day + timedelta(days=offset)
+        exception = get_exception(candidate) or {}
+        if normally_open(candidate) and not exception.get("closed"):
+            return candidate
+
+    return None
+
+
+def closed_template():
+    return CLOSED_TEMPLATE if CLOSED_TEMPLATE.exists() else None
+
+
+def closed_image(day):
+    """
+    Storia 1080x1920 per la serata chiusa, dal template chiusura.html.
+    None se manca il template. Il template segnala che è pronto
+    (font caricati) con data-pronto sul body.
+    """
+
+    if closed_template() is None:
+        return None
+
+    reopen = next_open_day(day)
+
+    values = {
+        "giorno_sett": DAY_NAMES[day.weekday()].upper(),
+        "giorno": str(day.day),
+        "mese": MONTH_NAMES[day.month - 1].upper(),
+        "titolo": "STASERA CHIUSO" if day == service_date() else "CHIUSO",
+        "riapertura_label": "RIAPRIAMO" if reopen else "",
+        "riapertura": long_date(reopen) if reopen else "",
+        "ora_label": f"DALLE {NORMAL_OPENS}" if reopen else "",
+    }
+
+    page = CLOSED_TEMPLATE.read_text(encoding="utf-8")
+
+    for key, value in values.items():
+        page = page.replace("{" + key + "}", html_escape(value))
+
+    # Nella cartella del template, così logo e altri file si trovano
+    html_file = TEMPLATES / ".render.html"
+    html_file.write_text(page, encoding="utf-8")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        tab = browser.new_page(viewport={"width": 1080, "height": 1920})
+        tab.goto(html_file.as_uri())
+        tab.wait_for_selector("body[data-pronto]", state="attached", timeout=20000)
+        image = tab.locator("#storia").screenshot()
+        browser.close()
+
+    return image
 
 
 def get_entry(image):
@@ -661,7 +762,7 @@ def apply_change(change):
             # L'avviso sparisce da solo la mattina dopo
             expires = datetime.combine(day + timedelta(days=1), datetime.min.time(), TZ) + timedelta(hours=6)
             write_json("notice.json", {"text": tonight_notice(change), "expires": expires.isoformat()})
-        elif change.get("reset") and read_json("notice.json").get("expires"):
+        elif change.get("reset") and notice_for(day):
             write_json("notice.json", {"text": ""})
 
         return message, ["hours.json", "notice.json"]

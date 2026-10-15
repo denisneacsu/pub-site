@@ -316,6 +316,11 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, action,
         wait_until_live(context, query.message.chat_id, expected)
     )
 
+    if change["kind"] == "tonight" and change.get("closed"):
+        await send_closed_story_all(
+            context.bot, date.fromisoformat(change["date"]), change["by"], query.from_user.id,
+        )
+
 
 async def wait_until_live(context, chat_id, expected):
     """Controlla il sito finché i file pubblicati ({percorso: contenuto}) non sono aggiornati."""
@@ -423,7 +428,7 @@ def read_choice(step, raw, typed):
     text = raw.strip()
     empty = normalize(text) in ("no", "nessuna", "nessuno", "-", "none")
 
-    if step in ("date", "until"):
+    if step in ("date", "until", "close_day"):
 
         if step == "until" and empty:
             return "", None
@@ -433,8 +438,14 @@ def read_choice(step, raw, typed):
         if not day:
             return None, "Non ho capito la data. Scrivila così: 31/10"
 
-        if day < today():
+        # Dopo mezzanotte la serata in corso è ancora quella di ieri
+        first = core.service_date() if step == "close_day" else today()
+
+        if day < first:
             return None, "Questa data è già passata."
+
+        if step == "close_day" and not core.normally_open(day):
+            return None, "Quel giorno siete già chiusi per orario normale (lunedì)."
 
         return day.isoformat(), None
 
@@ -552,6 +563,14 @@ async def handle_answer(update, context, raw, typed):
         return await ask_price(update, context, "add_price", ctx)
 
     # --- Orario di stasera ---
+    if mode == "tonight" and step == "close_day":
+        ctx["date"] = value
+        # Stasera: come prima, con la domanda sull'avviso.
+        # Un altro giorno: niente avviso (direbbe "stasera" in anticipo)
+        if date.fromisoformat(value) == core.service_date():
+            return await ask_tonight_notice(update, context, ctx)
+        return await propose_tonight(update, context, ctx)
+
     if mode == "tonight":
         ctx["closes"] = value
         return await ask_tonight_notice(update, context, ctx)
@@ -1282,7 +1301,9 @@ async def tonight_screen(update, context):
     if not core.normally_open(day):
         return await respond(
             update,
-            f"🕑 <b>Stasera</b> ({label})\nIl locale è chiuso per orario normale (lunedì).",
+            f"🕑 <b>Stasera</b> ({label})\nIl locale è chiuso per orario normale (lunedì)."
+            + closures_text(),
+            keyboard([("📅 Chiuso un altro giorno", "tn:closed_day")], *closures_rows()),
         )
 
     exception = core.get_exception(day)
@@ -1294,18 +1315,38 @@ async def tonight_screen(update, context):
     else:
         status = f"{core.NORMAL_OPENS} – <b>{exception['closes']}</b> (chiude prima)"
 
-    rows = [[("🌙 Chiudiamo prima", "tn:early"), ("🚫 Stasera chiuso", "tn:closed")]]
+    rows = [[("🌙 Chiudiamo prima", "tn:early"), ("🚫 Chiuso", "tn:closed")]]
+
+    if exception and exception.get("closed") and core.closed_template():
+        rows.append([("🖼️ Immagine chiusura", "tn:image")])
 
     if exception:
         rows.append([("↩️ Torna all'orario normale", "tn:reset")])
+
+    rows += closures_rows()
 
     await respond(
         update,
         f"🕑 <b>Stasera</b> ({label})\n{status}\n\n"
         "Le modifiche valgono solo per questa serata: "
-        "domani torna da solo l'orario normale.",
+        "domani torna da solo l'orario normale."
+        + closures_text(),
         keyboard(*rows),
     )
+
+
+def closures_text():
+
+    days = core.upcoming_closures()
+
+    if not days:
+        return ""
+
+    return "\n\n📅 <b>Chiusure programmate</b>\n" + "\n".join(f"• {short_date(d)}" for d in days)
+
+
+def closures_rows():
+    return [[(f"↩️ Riapri {short_date(d)}", f"tn:reopen:{d.isoformat()}")] for d in core.upcoming_closures()]
 
 
 async def tonight_action(update, context, action):
@@ -1325,8 +1366,39 @@ async def tonight_action(update, context, action):
         )
 
     if action == "closed":
+        return await respond(
+            update,
+            "🚫 Quale sera siete <b>chiusi</b>?",
+            keyboard(
+                [(f"Stasera ({short_date(day)})", "tn:closed_tonight")],
+                [("📅 Scegli altro giorno", "tn:closed_day")],
+                [CANCEL],
+            ),
+        )
+
+    if action == "closed_tonight":
         ctx["closed"] = True
         return await ask_tonight_notice(update, context, ctx)
+
+    if action == "closed_day":
+        days = [d for d in (day + timedelta(days=n) for n in range(1, 10)) if core.normally_open(d)]
+        return await ask(
+            update, context, "close_day", {"mode": "tonight", "closed": True},
+            "📅 Quale sera siete <b>chiusi</b>? Scegli o scrivi (es. 31/10)",
+            pairs([(short_date(d), d.isoformat()) for d in days[:6]]),
+        )
+
+    if action == "image":
+        return await send_closed_image(update.effective_message, day)
+
+    if action.startswith("reopen:"):
+        other = date.fromisoformat(action.removeprefix("reopen:"))
+        return await propose(
+            update, context,
+            {"kind": "tonight", "date": other.isoformat(), "reset": True},
+            f"↩️ {short_date(other)} torna l'orario normale: "
+            f"{core.NORMAL_OPENS} – {core.NORMAL_CLOSES}.",
+        )
 
     if action == "reset":
         return await propose(
@@ -1335,6 +1407,54 @@ async def tonight_action(update, context, action):
             f"↩️ Stasera ({short_date(day)}) torna l'orario normale: "
             f"{core.NORMAL_OPENS} – {core.NORMAL_CLOSES}.",
         )
+
+
+async def closed_story(day):
+    """Storia Instagram della serata chiusa (None se manca il template o fallisce)."""
+
+    try:
+        return await asyncio.to_thread(core.closed_image, day)
+    except Exception:
+        log.exception("Storia chiusura fallita")
+        return None
+
+
+async def send_closed_image(message, day):
+
+    if not core.closed_template():
+        return
+
+    image = await closed_story(day)
+
+    if image is None:
+        return await message.reply_text("⚠️ Non riesco a preparare la storia di chiusura.")
+
+    await message.reply_photo(photo=image, caption="🖼️ Storia per Instagram, pronta da condividere.")
+
+
+async def send_closed_story_all(bot, day, by, requester):
+    """Dopo la pubblicazione: la storia arriva a tutti gli utenti del bot."""
+
+    if not core.closed_template():
+        return
+
+    image = await closed_story(day)
+
+    if image is None:
+        return await bot.send_message(requester, "⚠️ Non riesco a preparare la storia di chiusura.")
+
+    label = short_date(day)
+
+    for user_id in ALLOWED:
+        caption = (
+            "🖼️ Storia per Instagram, pronta da condividere."
+            if user_id == requester
+            else f"🖼️ {by} ha segnato chiuso {label}: ecco la storia per Instagram."
+        )
+        try:
+            await bot.send_photo(user_id, photo=image, caption=caption)
+        except Exception:
+            log.warning("Storia non consegnata a %s", user_id)
 
 
 async def ask_tonight_notice(update, context, ctx):
@@ -1362,9 +1482,17 @@ async def tonight_confirm(update, context, with_notice):
 
     await respond(update, "📢 Con avviso" if with_notice else "Senza avviso")
 
-    label = short_date(date.fromisoformat(ctx["date"]))
+    await propose_tonight(update, context, ctx, with_notice)
 
-    if ctx.get("closed"):
+
+async def propose_tonight(update, context, ctx, with_notice=False):
+
+    day = date.fromisoformat(ctx["date"])
+    label = short_date(day)
+
+    if ctx.get("closed") and day != core.service_date():
+        summary = f"🚫 <b>{label}: chiuso</b>\nSolo quella sera, poi torna da solo l'orario normale."
+    elif ctx.get("closed"):
         summary = f"🚫 <b>Stasera ({label}) chiuso</b>"
     else:
         summary = (
@@ -1375,7 +1503,8 @@ async def tonight_confirm(update, context, with_notice):
     if with_notice:
         summary += f"\n📢 Avviso: «{esc(core.tonight_notice(ctx))}»"
 
-    summary += "\nDomani torna da solo l'orario normale."
+    if day == core.service_date():
+        summary += "\nDomani torna da solo l'orario normale."
 
     change = {"kind": "tonight", "date": ctx["date"], "notice": with_notice}
     change.update({k: ctx[k] for k in ("closes", "closed") if k in ctx})
