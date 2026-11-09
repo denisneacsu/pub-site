@@ -11,8 +11,7 @@
         },
         {
             "day": "mercoledì",
-            "opens": "19:00",
-            "closes": "02:30"
+            "closed": true
         },
         {
             "day": "giovedì",
