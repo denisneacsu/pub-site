@@ -3,7 +3,10 @@ document.addEventListener("DOMContentLoaded", () => {
     /*
      * Badge "Aperto ora / Chiuso" calcolato sull'ora italiana.
      *
-     * Orari: dal martedì alla domenica 19:00 – 02:30, lunedì chiuso.
+     * Orario normale in hours.json, "week": 7 voci da lunedì a domenica,
+     * { "opens": "19:00", "closes": "02:30" } oppure { "closed": true }.
+     * Lo cambia il bot (📅 Orario di apertura). Se manca, valgono
+     * le costanti qui sotto: lunedì chiuso, gli altri 19:00 – 02:30.
      * La chiusura dopo mezzanotte appartiene alla serata precedente:
      * martedì all'01:00 il locale è chiuso (lunedì non apre),
      * lunedì all'01:00 è aperto (coda della domenica).
@@ -13,13 +16,16 @@ document.addEventListener("DOMContentLoaded", () => {
      *   { "date": "2026-10-08", "closed": true }     serata chiusa
      * "date" è il giorno in cui la serata inizia.
      *
-     * Se cambiano gli orari normali, modificare solo queste costanti
-     * (e il JSON-LD in index.html).
      */
 
     const OPEN_DAYS = [0, 2, 3, 4, 5, 6];   // 0 = domenica, 1 = lunedì...
     const OPENS = "19:00";
     const CLOSES = "02:30";
+
+    // Orario normale per giorno (0 = domenica): null = chiuso
+    let week = [0, 1, 2, 3, 4, 5, 6].map(day =>
+        OPEN_DAYS.includes(day) ? { opens: OPENS, closes: CLOSES } : null
+    );
 
     const DAY_NAMES = [
         "domenica", "lunedì", "martedì", "mercoledì",
@@ -86,13 +92,14 @@ document.addEventListener("DOMContentLoaded", () => {
     function evening(date) {
 
         const exception = exceptions[isoDate(date)] || {};
+        const normal = week[date.getUTCDay()];
 
-        if (!OPEN_DAYS.includes(date.getUTCDay()) || exception.closed) {
+        if (!normal || exception.closed) {
             return null;
         }
 
-        const closes = exception.closes || CLOSES;
-        const opens = toMinutes(OPENS);
+        const closes = exception.closes || normal.closes;
+        const opens = toMinutes(normal.opens);
 
         let end = toMinutes(closes);
 
@@ -100,7 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
             end += 24 * 60;
         }
 
-        return { opens, closes, end, early: Boolean(exception.closes) };
+        return { opens, closes, end, starts: normal.opens, early: Boolean(exception.closes) };
     }
 
 
@@ -109,15 +116,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const tonight = evening(today);
 
         if (tonight && minutes < tonight.opens) {
-            return "oggi";
+            return `oggi alle ${tonight.starts}`;
         }
 
         for (let offset = 1; offset <= 7; offset++) {
 
             const day = addDays(today, offset);
+            const next = evening(day);
 
-            if (evening(day)) {
-                return offset === 1 ? "domani" : DAY_NAMES[day.getUTCDay()];
+            if (next) {
+                return `${offset === 1 ? "domani" : DAY_NAMES[day.getUTCDay()]} alle ${next.starts}`;
             }
         }
 
@@ -143,10 +151,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const when = nextOpening(today, minutes);
-        const reopens = when ? ` · apre ${when} alle ${OPENS}` : "";
+        const reopens = when ? ` · apre ${when}` : "";
 
         // Serata di oggi annullata per eccezione
-        if ((exceptions[isoDate(today)] || {}).closed && OPEN_DAYS.includes(today.getUTCDay())) {
+        if ((exceptions[isoDate(today)] || {}).closed && week[today.getUTCDay()]) {
             return { open: false, text: `Chiuso stasera${reopens}` };
         }
 
@@ -179,6 +187,14 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch("hours.json", { cache: "no-store" })
         .then(response => response.ok ? response.json() : { exceptions: [] })
         .then(data => {
+            // "week" parte dal lunedì, week[] qui dalla domenica
+            if (Array.isArray(data.week) && data.week.length === 7) {
+                week = data.week.map((_, day, list) => {
+                    const hours = list[(day + 6) % 7];
+                    return hours.closed ? null : hours;
+                });
+            }
+
             (data.exceptions || []).forEach(item => {
                 exceptions[item.date] = item;
             });

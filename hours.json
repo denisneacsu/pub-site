@@ -1,4 +1,40 @@
 {
+    "week": [
+        {
+            "day": "lunedì",
+            "closed": true
+        },
+        {
+            "day": "martedì",
+            "opens": "19:00",
+            "closes": "02:30"
+        },
+        {
+            "day": "mercoledì",
+            "opens": "19:00",
+            "closes": "02:30"
+        },
+        {
+            "day": "giovedì",
+            "opens": "19:00",
+            "closes": "02:30"
+        },
+        {
+            "day": "venerdì",
+            "opens": "19:00",
+            "closes": "02:30"
+        },
+        {
+            "day": "sabato",
+            "opens": "19:00",
+            "closes": "02:30"
+        },
+        {
+            "day": "domenica",
+            "opens": "19:00",
+            "closes": "02:30"
+        }
+    ],
     "exceptions": [
         {
             "date": "2026-10-28",

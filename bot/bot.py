@@ -105,12 +105,13 @@ B_EVENTS = "📅 Eventi"
 B_PROMOS = "🏷️ Promozioni"
 B_MENU = "🍔 Menu"
 B_NOTICE = "📢 Avviso"
-B_TONIGHT = "🕑 Orario di stasera"
+B_HOURS = "🕑 Orario"
+B_TONIGHT_OLD = "🕑 Orario di stasera"   # tastiera vecchia, finché non arriva quella nuova
 B_MORE = "⚙️ Altro"
 B_PUBLISH = "🚀 Pubblica modifiche"
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_TONIGHT, B_NOTICE], [B_MORE, B_PUBLISH]],
+    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_HOURS, B_NOTICE], [B_MORE, B_PUBLISH]],
     resize_keyboard=True,
     is_persistent=True,
 )
@@ -445,7 +446,7 @@ def read_choice(step, raw, typed):
             return None, "Questa data è già passata."
 
         if step == "close_day" and not core.normally_open(day):
-            return None, "Quel giorno siete già chiusi per orario normale (lunedì)."
+            return None, "Quel giorno siete già chiusi per orario normale."
 
         return day.isoformat(), None
 
@@ -478,13 +479,25 @@ def read_choice(step, raw, typed):
         if not time:
             return None, "Non ho capito l'ora. Scrivila così: 00:30"
 
-        if not core.valid_early_close(time):
+        hours = core.day_hours(core.service_date())
+
+        if not hours:
+            return None, "Stasera il locale è chiuso per orario normale."
+
+        if not core.valid_early_close(time, core.service_date()):
             return None, (
-                f"Deve essere dopo le {core.NORMAL_OPENS} "
-                f"e prima delle {core.NORMAL_CLOSES}."
+                f"Deve essere dopo le {hours['opens']} "
+                f"e prima delle {hours['closes']}."
             )
 
         return time, None
+
+    if step == "week_opens" and normalize(text) in ("closed", "chiuso"):
+        return "closed", None
+
+    if step in ("week_opens", "week_closes"):
+        time = parse_time(text)
+        return (time, None) if time else (None, "Non ho capito l'ora. Scrivila così: 19:00")
 
     return text, None
 
@@ -561,6 +574,10 @@ async def handle_answer(update, context, raw, typed):
             ctx["item"].pop("description")
 
         return await ask_price(update, context, "add_price", ctx)
+
+    # --- Orario normale della settimana ---
+    if mode == "week":
+        return await week_answer(update, context, step, ctx, value)
 
     # --- Orario di stasera ---
     if mode == "tonight" and step == "close_day":
@@ -1289,6 +1306,126 @@ async def notice_action(update, context, action):
 # ORARIO DI STASERA (eccezione per una sola serata)
 # =========================================================
 
+async def hours_screen(update, context):
+
+    context.user_data.pop("awaiting", None)
+
+    await in_repo(core.sync)
+
+    day = core.service_date()
+
+    await respond(
+        update,
+        f"🕑 <b>Orario</b>\nStasera ({short_date(day)}): {tonight_status(day)}",
+        keyboard(
+            [("🌙 Orario di stasera", "hr:tonight")],
+            [("📅 Orario di apertura", "hr:week")],
+        ),
+    )
+
+
+def tonight_status(day):
+
+    hours = core.day_hours(day)
+    exception = core.get_exception(day) or {}
+
+    if not hours or exception.get("closed"):
+        return "chiuso"
+
+    return f"{hours['opens']} – {exception.get('closes') or hours['closes']}"
+
+
+async def week_screen(update, context):
+
+    context.user_data.pop("awaiting", None)
+
+    await in_repo(core.sync)
+
+    rows = [
+        [(f"{core.DAY_NAMES[n]} · {core.hours_text(hours)}", f"wk:{n}")]
+        for n, hours in enumerate(core.read_week())
+    ]
+
+    await respond(
+        update,
+        "📅 <b>Orario di apertura</b>\n"
+        "L'orario normale del sito, giorno per giorno. Tocca un giorno per cambiarlo.\n"
+        "Le modifiche vanno in 🚀 Pubblica modifiche.",
+        keyboard(*rows, [("⬅️ Orario", "hr")]),
+    )
+
+
+async def week_day(update, context, n):
+
+    current = core.hours_text(core.read_week()[n])
+
+    await ask(
+        update, context, "week_opens", {"mode": "week", "day": n},
+        f"📅 <b>{core.DAY_NAMES[n]}</b> (ora: {current})\n"
+        "A che ora <b>apre</b>? Scegli o scrivi (es. 19:00)",
+        [
+            [("17:00", "17:00"), ("18:00", "18:00"), ("18:30", "18:30")],
+            [("19:00", "19:00"), ("19:30", "19:30"), ("20:00", "20:00")],
+            [("🚫 Chiuso tutto il giorno", "closed")],
+        ],
+    )
+
+
+async def week_answer(update, context, step, ctx, value):
+
+    name = core.DAY_NAMES[ctx["day"]]
+
+    if step == "week_opens" and value == "closed":
+        return await propose_week(update, context, ctx, closed=True)
+
+    if step == "week_opens":
+        ctx["opens"] = value
+        return await ask(
+            update, context, "week_closes", ctx,
+            f"📅 <b>{name}</b>: apre alle {value}\n"
+            "A che ora <b>chiude</b>? Scegli o scrivi (es. 02:30)",
+            [
+                [("23:00", "23:00"), ("00:00", "00:00"), ("01:00", "01:00")],
+                [("01:30", "01:30"), ("02:00", "02:00"), ("02:30", "02:30")],
+                [("03:00", "03:00")],
+            ],
+        )
+
+    # Chiusura: dopo l'apertura, al massimo la mattina dopo
+    length = core.end_minutes(ctx["opens"], value) - core.to_minutes(ctx["opens"])
+
+    if not 60 <= length <= 16 * 60:
+        return await update.effective_message.reply_text(
+            f"Apre alle {ctx['opens']}: la chiusura alle {value} non torna. "
+            "Riprova, oppure premi ✖️ Annulla."
+        )
+
+    ctx["closes"] = value
+
+    await propose_week(update, context, ctx)
+
+
+async def propose_week(update, context, ctx, closed=False):
+
+    n = ctx["day"]
+    before = core.hours_text(core.read_week()[n])
+
+    change = {"kind": "week", "day": n}
+
+    if closed:
+        change["closed"] = True
+        after = "chiuso"
+    else:
+        change.update(opens=ctx["opens"], closes=ctx["closes"])
+        after = f"{ctx['opens']} – {ctx['closes']}"
+
+    await propose(
+        update, context, change,
+        f"📅 Orario normale <b>{core.DAY_NAMES[n]}</b>: {after}\n(prima: {before})",
+        back=("📅 Orario di apertura", "hr:week"),
+    )
+
+
 async def tonight_screen(update, context):
 
     context.user_data.pop("awaiting", None)
@@ -1298,10 +1435,12 @@ async def tonight_screen(update, context):
     day = core.service_date()
     label = short_date(day)
 
-    if not core.normally_open(day):
+    hours = core.day_hours(day)
+
+    if not hours:
         return await respond(
             update,
-            f"🕑 <b>Stasera</b> ({label})\nIl locale è chiuso per orario normale (lunedì)."
+            f"🕑 <b>Stasera</b> ({label})\nIl locale è chiuso per orario normale."
             + closures_text(),
             keyboard([("📅 Chiuso un altro giorno", "tn:closed_day")], *closures_rows()),
         )
@@ -1309,11 +1448,11 @@ async def tonight_screen(update, context):
     exception = core.get_exception(day)
 
     if not exception:
-        status = f"{core.NORMAL_OPENS} – {core.NORMAL_CLOSES} (orario normale)"
+        status = f"{hours['opens']} – {hours['closes']} (orario normale)"
     elif exception.get("closed"):
         status = "🚫 Chiuso stasera"
     else:
-        status = f"{core.NORMAL_OPENS} – <b>{exception['closes']}</b> (chiude prima)"
+        status = f"{hours['opens']} – <b>{exception['closes']}</b> (chiude prima)"
 
     rows = [[("🌙 Chiudiamo prima", "tn:early"), ("🚫 Chiuso", "tn:closed")]]
 
@@ -1397,7 +1536,7 @@ async def tonight_action(update, context, action):
             update, context,
             {"kind": "tonight", "date": other.isoformat(), "reset": True},
             f"↩️ {short_date(other)} torna l'orario normale: "
-            f"{core.NORMAL_OPENS} – {core.NORMAL_CLOSES}.",
+            f"{core.hours_text(core.day_hours(other))}.",
         )
 
     if action == "reset":
@@ -1405,7 +1544,7 @@ async def tonight_action(update, context, action):
             update, context,
             {"kind": "tonight", "date": day.isoformat(), "reset": True},
             f"↩️ Stasera ({short_date(day)}) torna l'orario normale: "
-            f"{core.NORMAL_OPENS} – {core.NORMAL_CLOSES}.",
+            f"{core.hours_text(core.day_hours(day))}.",
         )
 
 
@@ -1497,7 +1636,7 @@ async def propose_tonight(update, context, ctx, with_notice=False):
     else:
         summary = (
             f"🌙 <b>Stasera ({label})</b>\nChiudiamo alle <b>{ctx['closes']}</b> "
-            f"invece delle {core.NORMAL_CLOSES}."
+            f"invece delle {core.day_hours(day)['closes']}."
         )
 
     if with_notice:
@@ -1524,7 +1663,7 @@ Usa i pulsanti in basso 👇
 📷 <b>Nuova locandina</b> — manda la foto (meglio come file 📎) e rispondi alle domande. Prima di pubblicare vedi l'anteprima.
 📅 <b>Eventi</b> · 🏷️ <b>Promozioni</b> — modifica titolo, data, ora, scadenza, oppure togli.
 🍔 <b>Menu</b> — categoria → voce → prezzo, nome, descrizione, homepage, nascondi, elimina. ➕ per aggiungere.
-🕑 <b>Orario di stasera</b> — chiudete prima o restate chiusi una sera, senza cambiare gli orari normali.
+🕑 <b>Orario</b> — 🌙 di stasera: chiudete prima o restate chiusi una sera. 📅 di apertura: l'orario normale di ogni giorno della settimana.
 📢 <b>Avviso</b> — barra in fondo al sito per comunicazioni veloci.
 ⚙️ <b>Altro</b> — annulla l'ultima modifica pubblicata, storico.
 🚀 <b>Pubblica modifiche</b> — vedi la lista delle modifiche in attesa e le metti sul sito tutte insieme.
@@ -1873,7 +2012,8 @@ MAIN_ACTIONS = {
     B_PROMOS: lambda u, c: entries_screen(u, c, promos=True),
     B_MENU: menu_screen,
     B_NOTICE: notice_screen,
-    B_TONIGHT: tonight_screen,
+    B_HOURS: lambda u, c: hours_screen(u, c),
+    B_TONIGHT_OLD: lambda u, c: hours_screen(u, c),
     B_MORE: more_screen,
     B_PUBLISH: publish_screen,
 }
@@ -1957,6 +2097,15 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if head == "notice":
         return await notice_action(update, context, rest)
+
+    if data == "hr":
+        return await hours_screen(update, context)
+
+    if head == "hr":
+        return await (tonight_screen if rest == "tonight" else week_screen)(update, context)
+
+    if head == "wk":
+        return await week_day(update, context, int(rest))
 
     if head == "tn":
         if rest.startswith("notice:"):
@@ -2092,6 +2241,28 @@ async def remind_draft(context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# Messaggio per tutti, mandato una volta sola dopo l'aggiornamento.
+# Per un nuovo annuncio: cambiare l'id e il testo.
+ANNOUNCEMENT_ID = "2026-11-orario"
+ANNOUNCEMENT = """\
+🕑 Il pulsante "Orario di stasera" ora si chiama <b>🕑 Orario</b>. Dentro trovate 🌙 <b>Orario di stasera</b> (come prima) e 📅 <b>Orario di apertura</b>, per cambiare l'orario normale di ogni giorno. Le modifiche all'orario di apertura vanno in 🚀 Pubblica modifiche.
+
+📋 <b>Promemoria</b>: completate e sistemate il menu da 🍔 Menu (voci mancanti, prezzi, descrizioni)."""
+
+
+def announcement_due():
+
+    state = core.read_state()
+
+    if state.get("announced") == ANNOUNCEMENT_ID:
+        return False
+
+    state["announced"] = ANNOUNCEMENT_ID
+    core.write_state(state)
+
+    return True
+
+
 async def post_init(app: Application):
 
     await app.bot.set_my_commands([
@@ -2100,6 +2271,7 @@ async def post_init(app: Application):
         BotCommand("eventi", "Eventi sul sito"),
         BotCommand("promozioni", "Promozioni sul sito"),
         BotCommand("avviso", "Avviso in fondo al sito"),
+        BotCommand("orario", "Orario di stasera e orario di apertura"),
         BotCommand("stasera", "Orario di stasera (chiusura anticipata)"),
         BotCommand("pubblica", "Modifiche in attesa da pubblicare"),
         BotCommand("aiuto", "Come si usa"),
@@ -2117,6 +2289,9 @@ async def post_init(app: Application):
             "I pulsanti in basso sono già aggiornati. Se non li vedi, scrivi /start.",
             markup=MAIN_KEYBOARD,
         )
+
+    if await in_repo(announcement_due):
+        await notify_all(app.bot, ANNOUNCEMENT, markup=MAIN_KEYBOARD)
 
     # Il primo controllo segnala anche le modifiche fatte mentre il bot era spento
     app.job_queue.run_repeating(check_site, interval=SITE_CHECK_SECONDS, first=20)
@@ -2144,6 +2319,7 @@ def main():
         "eventi": lambda u, c: entries_screen(u, c, promos=False),
         "promozioni": lambda u, c: entries_screen(u, c, promos=True),
         "avviso": cmd_notice,
+        "orario": hours_screen,
         "stasera": tonight_screen,
         "pubblica": publish_screen,
         "annulla": lambda u, c: more_action(u, c, "undo"),

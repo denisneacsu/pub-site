@@ -196,9 +196,14 @@ def shown_featured(events):
     )
 
 
-# Orari normali (uguali a js/hours.js): lunedì chiuso
-NORMAL_OPENS = "19:00"
-NORMAL_CLOSES = "02:30"
+# Orario normale della settimana: "week" in hours.json, da lunedì a domenica.
+# Si cambia dal bot (📅 Orario di apertura). Se manca, vale questo:
+# lunedì chiuso, gli altri giorni 19:00 – 02:30 (come js/hours.js).
+DEFAULT_OPENS = "19:00"
+DEFAULT_CLOSES = "02:30"
+
+WEEK_NAMES = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+SCHEMA_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
 def service_date():
@@ -207,7 +212,7 @@ def service_date():
 
 
 def normally_open(day):
-    return day.weekday() != 0
+    return day_hours(day) is not None
 
 
 def read_hours():
@@ -215,6 +220,42 @@ def read_hours():
         return read_json("hours.json")
     except (OSError, ValueError):
         return {"exceptions": []}
+
+
+def read_week():
+    """Orario normale: 7 voci da lunedì, {"opens", "closes"} o {"closed": true}."""
+
+    week = read_hours().get("week")
+
+    if week and len(week) == 7:
+        return week
+
+    return [
+        {"day": name, "closed": True} if n == 0
+        else {"day": name, "opens": DEFAULT_OPENS, "closes": DEFAULT_CLOSES}
+        for n, name in enumerate(WEEK_NAMES)
+    ]
+
+
+def day_hours(day):
+    """Orario normale della serata che inizia in `day` (None se chiuso)."""
+
+    hours = read_week()[day.weekday()]
+
+    return None if hours.get("closed") else hours
+
+
+def hours_text(hours):
+    return "chiuso" if not hours or hours.get("closed") else f"{hours['opens']} – {hours['closes']}"
+
+
+def write_hours(**changes):
+    """Aggiorna hours.json senza perdere le altre parti (week / exceptions)."""
+
+    data = read_hours()
+    data.update(changes)
+
+    write_json("hours.json", {"week": data.get("week") or read_week(), "exceptions": data.get("exceptions", [])})
 
 
 def upcoming_closures():
@@ -252,17 +293,149 @@ def to_minutes(time):
     return hours * 60 + minutes
 
 
-def valid_early_close(time):
+def end_minutes(opens, closes):
+    """Chiusura in minuti dalla mezzanotte del giorno di apertura (dopo le 24 = notte dopo)."""
+
+    end = to_minutes(closes)
+
+    return end + 24 * 60 if end <= to_minutes(opens) else end
+
+
+def valid_early_close(time, day):
     """Chiusura anticipata: dopo l'apertura e prima della chiusura normale."""
 
-    opens = to_minutes(NORMAL_OPENS)
-    normal = to_minutes(NORMAL_CLOSES) + 24 * 60
+    hours = day_hours(day)
 
-    end = to_minutes(time)
-    if end <= opens:
-        end += 24 * 60
+    if not hours:
+        return False
 
-    return opens < end < normal
+    opens = to_minutes(hours["opens"])
+
+    return opens < end_minutes(hours["opens"], time) < end_minutes(hours["opens"], hours["closes"])
+
+
+# --- Orario normale scritto in index.html (contatti, anteprima link, Google) ---
+
+def week_groups(week):
+    """Giorni consecutivi con lo stesso orario: [(primo, ultimo, orario | None)]."""
+
+    groups = []
+
+    for n, hours in enumerate(week):
+        value = None if hours.get("closed") else (hours["opens"], hours["closes"])
+        if groups and groups[-1][2] == value:
+            groups[-1][1] = n
+        else:
+            groups.append([n, n, value])
+
+    return groups
+
+
+def days_label(first, last):
+    names = [WEEK_NAMES[first].capitalize(), WEEK_NAMES[last].capitalize()]
+    return names[0] if first == last else " – ".join(names)
+
+
+def contact_hours_html(week, indent=" " * 28):
+    """Testo del riquadro ORARI, come quello scritto a mano."""
+
+    groups = week_groups(week)
+    opened = [g for g in groups if g[2]]
+    closed = [g for g in groups if not g[2]]
+
+    if len(opened) == 1:
+        first, last, (opens, closes) = opened[0]
+        lines = [days_label(first, last), f"{opens} – {closes}"]
+    else:
+        lines = [f"{days_label(a, b)}: {o} – {c}" for a, b, (o, c) in opened]
+
+    lines += [f"{days_label(a, b)} {'chiuso' if a == b else 'chiusi'}" for a, b, _ in closed]
+
+    return "<br>\n".join(indent + line for line in lines)
+
+
+def preview_hours_sentence(week):
+    """Frase sugli orari nell'anteprima del link ('' se non riassumibile)."""
+
+    groups = week_groups(week)
+    opened = [g for g in groups if g[2]]
+    starts = {g[2][0] for g in opened}
+
+    if not opened or len(starts) != 1:
+        return ""
+
+    opens = starts.pop()
+
+    if len(opened) == 1 and len(groups) == 1:
+        return f"Aperto tutti i giorni dalle {opens}."
+
+    if len(opened) == 1:
+        first, last, _ = opened[0]
+        # "dal martedì alla domenica", "dalla domenica al giovedì"
+        dal = "dalla" if first == 6 else "dal"
+        al = "alla" if last == 6 else "al"
+        return f"Aperto {dal} {WEEK_NAMES[first]} {al} {WEEK_NAMES[last]} dalle {opens}."
+
+    closed = [WEEK_NAMES[n] for n, h in enumerate(week) if h.get("closed")]
+
+    if not closed:
+        return f"Aperto tutti i giorni dalle {opens}."
+
+    return f"Aperto dalle {opens}, {' e '.join(closed)} {'chiuso' if len(closed) == 1 else 'chiusi'}."
+
+
+def schema_hours(week, indent=" " * 8):
+    """openingHoursSpecification del JSON-LD (dati per Google)."""
+
+    specs = {}
+
+    for n, hours in enumerate(week):
+        if not hours.get("closed"):
+            specs.setdefault((hours["opens"], hours["closes"]), []).append(SCHEMA_DAYS[n])
+
+    pad = indent + " " * 4
+
+    items = [
+        f'{pad}{{\n'
+        f'{pad}    "@type": "OpeningHoursSpecification",\n'
+        f'{pad}    "dayOfWeek": {json.dumps(days)},\n'
+        f'{pad}    "opens": "{o}",\n'
+        f'{pad}    "closes": "{c}"\n'
+        f'{pad}}}'
+        for (o, c), days in specs.items()
+    ]
+
+    return "[\n" + ",\n".join(items) + "\n" + indent + "]"
+
+
+def write_index_hours(week):
+
+    page = (SITE / "index.html").read_text(encoding="utf-8")
+
+    page, found = re.subn(
+        r"(<!-- orari -->\n).*?(\n\s*<!-- /orari -->)",
+        lambda m: m.group(1) + contact_hours_html(week) + m.group(2),
+        page, flags=re.S,
+    )
+
+    if found != 1:
+        raise RuntimeError("index.html: segnaposto <!-- orari --> non trovato")
+
+    page = re.sub(
+        r'("openingHoursSpecification": )\[.*?\n {8}\]',
+        lambda m: m.group(1) + schema_hours(week),
+        page, count=1, flags=re.S,
+    )
+
+    sentence = preview_hours_sentence(week)
+
+    page = re.sub(
+        r'(<meta property="og:description" content="[^"]*?\(TO\)\.)[^"]*(")',
+        lambda m: m.group(1) + (f" {sentence}" if sentence else "") + m.group(2),
+        page, count=1,
+    )
+
+    (SITE / "index.html").write_text(page, encoding="utf-8")
 
 
 def tonight_notice(change):
@@ -325,7 +498,7 @@ def closed_image(day):
         "titolo": "STASERA CHIUSO" if day == service_date() else "CHIUSO",
         "riapertura_label": "RIAPRIAMO" if reopen else "",
         "riapertura": long_date(reopen) if reopen else "",
-        "ora_label": f"DALLE {NORMAL_OPENS}" if reopen else "",
+        "ora_label": f"DALLE {day_hours(reopen)['opens']}" if reopen else "",
     }
 
     page = CLOSED_TEMPLATE.read_text(encoding="utf-8")
@@ -756,7 +929,7 @@ def apply_change(change):
         else:
             message = f"Orario {day:%d/%m}: orario normale"
 
-        write_json("hours.json", {"exceptions": exceptions})
+        write_hours(exceptions=exceptions)
 
         if change.get("notice"):
             # L'avviso sparisce da solo la mattina dopo
@@ -766,6 +939,23 @@ def apply_change(change):
             write_json("notice.json", {"text": ""})
 
         return message, ["hours.json", "notice.json"]
+
+    # --- Orario normale di un giorno della settimana ---
+
+    if kind == "week":
+
+        week = read_week()
+        name = WEEK_NAMES[change["day"]]
+
+        if change.get("closed"):
+            week[change["day"]] = {"day": name, "closed": True}
+        else:
+            week[change["day"]] = {"day": name, "opens": change["opens"], "closes": change["closes"]}
+
+        write_hours(week=week)
+        write_index_hours(week)
+
+        return f"Orario normale {name}: {hours_text(week[change['day']])}", ["hours.json", "index.html"]
 
     # --- Avviso ---
 
