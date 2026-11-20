@@ -8,9 +8,10 @@ insieme con "🚀 Pubblica modifiche" (un solo push): GitHub Pages
 pubblica in 1-2 minuti. Le locandine hanno l'anteprima con screenshot;
 Orario di stasera e Avviso si pubblicano subito.
 
-Si usa con i pulsanti: tastiera fissa in basso (Locandina, Eventi,
-Promozioni, Menu, Orario, Avviso, Altro, Pubblica) e menu a pulsanti
-dentro i messaggi.
+Si usa con i pulsanti: tastiera fissa in basso (Tavoli, Locandina,
+Eventi, Promozioni, Menu, Orario, Avviso, Altro, Pubblica) e menu a
+pulsanti dentro i messaggi. Tavoli (ordini dei 15 tavoli) è in
+tables.py e non tocca il sito.
 I comandi scritti (/prezzo, /avviso...) restano come scorciatoie.
 
 Configurazione in ~/memphis-bot/.env:
@@ -48,6 +49,7 @@ from telegram.ext import (
 )
 
 import core
+import tables
 from core import (
     SITE,
     UPLOADS,
@@ -109,9 +111,10 @@ B_HOURS = "🕑 Orario"
 B_TONIGHT_OLD = "🕑 Orario di stasera"   # tastiera vecchia, finché non arriva quella nuova
 B_MORE = "⚙️ Altro"
 B_PUBLISH = "🚀 Pubblica modifiche"
+B_TABLES = "🍽️ Tavoli"
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [[B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_HOURS, B_NOTICE], [B_MORE, B_PUBLISH]],
+    [[B_TABLES], [B_POSTER, B_EVENTS], [B_PROMOS, B_MENU], [B_HOURS, B_NOTICE], [B_MORE, B_PUBLISH]],
     resize_keyboard=True,
     is_persistent=True,
 )
@@ -1660,6 +1663,7 @@ HELP = """\
 
 Usa i pulsanti in basso 👇
 
+🍽️ <b>Tavoli</b> — tocca un tavolo → ➕ Aggiungi → categoria → prodotto (ogni tocco aggiunge 1). ✏️ Modifica per le quantità, 💶 Chiudi conto per liberare il tavolo. Gli ordini restano nel bot, non vanno sul sito.
 📷 <b>Nuova locandina</b> — manda la foto (meglio come file 📎) e rispondi alle domande. Prima di pubblicare vedi l'anteprima.
 📅 <b>Eventi</b> · 🏷️ <b>Promozioni</b> — modifica titolo, data, ora, scadenza, oppure togli.
 🍔 <b>Menu</b> — categoria → voce → prezzo, nome, descrizione, homepage, nascondi, elimina. ➕ per aggiungere.
@@ -1984,6 +1988,250 @@ async def cmd_notice(update, context):
 
 
 # =========================================================
+# TAVOLI
+# =========================================================
+#
+# Pulsanti (callback "tb:..."):
+#   tb                     griglia dei tavoli
+#   tb:t:N                 tavolo N
+#   tb:c:N                 categorie per aggiungere al tavolo N
+#   tb:l:N:CAT             prodotti della categoria
+#   tb:i:N:CAT:I           tocco su un prodotto (chiede la variante se ha due prezzi)
+#   tb:v:N:CAT:I:V         aggiunge il prodotto con la variante V
+#   tb:e:N                 modifica quantità
+#   tb:p:N:R / tb:m:N:R    +1 / -1 sulla riga R
+#   tb:x:N / tb:xy:N       chiudi conto / conferma
+
+def table_lines_text(lines, index=None):
+
+    priced = tables.priced_lines(lines, index)
+
+    rows = []
+    for line in priced:
+        name = line["name"] + (f" ({line['label']})" if line["label"] else "")
+        price = format_price(line["total"]) if line["price"] is not None else "—"
+        rows.append(f"{line['qty']}× {esc(name)} — {price}")
+
+    return "\n".join(rows)
+
+
+async def tables_screen(update, context, notice=None):
+
+    context.user_data.pop("awaiting", None)
+
+    data = tables.read_tables()
+    index = tables.menu_index()
+
+    buttons = []
+    busy = 0
+
+    for n in range(1, tables.TABLE_COUNT + 1):
+        lines = tables.get_lines(data, n)
+        if lines:
+            busy += 1
+            buttons.append((f"🔴 {n} · {format_price(tables.table_total(lines, index))}", f"tb:t:{n}"))
+        else:
+            buttons.append((f"🟢 {n}", f"tb:t:{n}"))
+
+    status = "tutti liberi" if not busy else f"{busy} occupat{'o' if busy == 1 else 'i'}"
+
+    await respond(
+        update,
+        (f"{notice}\n\n" if notice else "")
+        + f"🍽️ <b>Tavoli</b> — {status}\nTocca un tavolo per vedere o aggiungere l'ordine.",
+        keyboard(*[buttons[i:i + 3] for i in range(0, len(buttons), 3)]),
+    )
+
+
+async def table_screen(update, context, n):
+
+    context.user_data.pop("awaiting", None)
+
+    lines = tables.get_lines(tables.read_tables(), n)
+    index = tables.menu_index()
+
+    if lines:
+        text = (
+            f"🍽️ <b>Tavolo {n}</b>\n\n{table_lines_text(lines, index)}\n\n"
+            f"💶 <b>Totale {format_price(tables.table_total(lines, index))}</b>"
+        )
+        rows = [
+            [("➕ Aggiungi", f"tb:c:{n}")],
+            [("✏️ Modifica", f"tb:e:{n}"), ("💶 Chiudi conto", f"tb:x:{n}")],
+        ]
+    else:
+        text = f"🍽️ <b>Tavolo {n}</b>\nLibero, nessun ordine."
+        rows = [[("➕ Aggiungi", f"tb:c:{n}")]]
+
+    await respond(update, text, keyboard(*rows, [("⬅️ Tavoli", "tb")]))
+
+
+async def table_categories(update, context, n):
+
+    buttons = [(c["title"], f"tb:l:{n}:{c['id']}") for c in core.categories()]
+
+    await respond(
+        update,
+        f"🍽️ <b>Tavolo {n}</b> — aggiungi\nScegli la categoria.",
+        keyboard(*pairs(buttons), [(f"⬅️ Tavolo {n}", f"tb:t:{n}")]),
+    )
+
+
+def table_category(category_id):
+    return next((c for c in core.categories() if c["id"] == category_id), None)
+
+
+async def table_items(update, context, n, category_id, added=None):
+
+    category = table_category(category_id)
+
+    if not category:
+        return await table_categories(update, context, n)
+
+    # I prodotti nascosti (finiti) non si possono ordinare
+    rows = [
+        [(f"{item['name']} · {item_price(item)}"[:60], f"tb:i:{n}:{category_id}:{index}")]
+        for index, item in enumerate(category["items"])
+        if item.get("available") is not False
+    ]
+
+    lines = tables.get_lines(tables.read_tables(), n)
+    total = f" · {format_price(tables.table_total(lines))}" if lines else ""
+
+    text = f"🍽️ <b>Tavolo {n}</b>{total}\n<b>{esc(category['title'])}</b>: tocca per aggiungere 1."
+
+    if added:
+        text = f"✅ Aggiunto: <b>{esc(added)}</b>\n\n" + text
+
+    await respond(update, text, keyboard(
+        *rows,
+        [("⬅️ Categorie", f"tb:c:{n}"), (f"✅ Fine · Tavolo {n}", f"tb:t:{n}")],
+    ))
+
+
+async def table_pick(update, context, n, category_id, index, variant=None):
+
+    category = table_category(category_id)
+    items = category["items"] if category else []
+
+    if index >= len(items):
+        return await table_items(update, context, n, category_id)
+
+    item = items[index]
+    prices = item.get("prices")
+
+    # Doppio prezzo: prima si sceglie quale (piccola/media, calice/bottiglia)
+    if prices and variant is None:
+        if len(prices) == 1:
+            variant = 0
+        else:
+            columns = category.get("columns", [])
+            buttons = [
+                (f"{columns[v] if v < len(columns) else v + 1} · {format_price(p)}",
+                 f"tb:v:{n}:{category_id}:{index}:{v}")
+                for v, p in enumerate(prices)
+            ]
+            return await respond(
+                update,
+                f"🍽️ <b>Tavolo {n}</b>\n<b>{esc(item['name'])}</b>: quale?",
+                keyboard(buttons, [(f"⬅️ {category['title']}", f"tb:l:{n}:{category_id}")]),
+            )
+
+    qty = tables.add_item(n, category, item, variant)
+
+    label = tables.variant_label(category, variant)
+    name = item["name"] + (f" ({label})" if label else "")
+
+    await table_items(update, context, n, category_id, added=f"{name} — ora {qty}")
+
+
+async def table_edit(update, context, n):
+
+    lines = tables.get_lines(tables.read_tables(), n)
+
+    if not lines:
+        return await table_screen(update, context, n)
+
+    priced = tables.priced_lines(lines)
+
+    rows = []
+    for r, line in enumerate(priced):
+        name = line["name"] + (f" ({line['label']})" if line["label"] else "")
+        rows.append([
+            ("➖", f"tb:m:{n}:{r}"),
+            (f"{line['qty']}× {name}"[:40], f"tb:e:{n}"),
+            ("➕", f"tb:p:{n}:{r}"),
+        ])
+
+    await respond(
+        update,
+        f"✏️ <b>Tavolo {n}</b> — modifica\n➖ / ➕ per cambiare la quantità; a zero il prodotto si toglie.\n"
+        f"💶 Totale {format_price(sum(line['total'] for line in priced))}",
+        keyboard(*rows, [(f"✅ Fine · Tavolo {n}", f"tb:t:{n}")]),
+    )
+
+
+async def table_close(update, context, n):
+
+    lines = tables.get_lines(tables.read_tables(), n)
+
+    if not lines:
+        return await table_screen(update, context, n)
+
+    await respond(
+        update,
+        f"💶 <b>Chiudi conto · Tavolo {n}</b>\n\n{table_lines_text(lines)}\n\n"
+        f"<b>Totale {format_price(tables.table_total(lines))}</b>\n\n"
+        "Confermi? Il tavolo torna libero e l'ordine si cancella.",
+        keyboard(
+            [("✅ Conto chiuso, libera il tavolo", f"tb:xy:{n}")],
+            [(f"⬅️ Tavolo {n}", f"tb:t:{n}")],
+        ),
+    )
+
+
+async def table_action(update, context, rest):
+
+    parts = rest.split(":")
+    action, n = parts[0], int(parts[1])
+
+    if not 1 <= n <= tables.TABLE_COUNT:
+        return await tables_screen(update, context)
+
+    if action == "t":
+        return await table_screen(update, context, n)
+
+    if action == "c":
+        return await table_categories(update, context, n)
+
+    if action == "l":
+        return await table_items(update, context, n, parts[2])
+
+    if action == "i":
+        return await table_pick(update, context, n, parts[2], int(parts[3]))
+
+    if action == "v":
+        return await table_pick(update, context, n, parts[2], int(parts[3]), int(parts[4]))
+
+    if action == "e":
+        return await table_edit(update, context, n)
+
+    if action in ("p", "m"):
+        tables.change_qty(n, int(parts[2]), 1 if action == "p" else -1)
+        return await table_edit(update, context, n)
+
+    if action == "x":
+        return await table_close(update, context, n)
+
+    if action == "xy":
+        total = format_price(tables.table_total(tables.get_lines(tables.read_tables(), n)))
+        tables.close_table(n)
+        return await tables_screen(update, context, f"✅ <b>Tavolo {n}</b> chiuso ({total}), ora è libero.")
+
+    log.warning("Pulsante tavoli sconosciuto: %s", rest)
+
+
+# =========================================================
 # SMISTAMENTO
 # =========================================================
 
@@ -2016,6 +2264,7 @@ MAIN_ACTIONS = {
     B_TONIGHT_OLD: lambda u, c: hours_screen(u, c),
     B_MORE: more_screen,
     B_PUBLISH: publish_screen,
+    B_TABLES: tables_screen,
 }
 
 
@@ -2074,6 +2323,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if head == "ea":
         action, name = rest.split(":", 1)
         return await entry_action(update, context, action, name)
+
+    if data == "tb":
+        return await tables_screen(update, context)
+
+    if head == "tb":
+        return await table_action(update, context, rest)
 
     if data == "menu":
         return await menu_screen(update, context)
@@ -2243,11 +2498,8 @@ async def remind_draft(context: ContextTypes.DEFAULT_TYPE):
 
 # Messaggio per tutti, mandato una volta sola dopo l'aggiornamento.
 # Per un nuovo annuncio: cambiare l'id e il testo.
-ANNOUNCEMENT_ID = "2026-11-orario"
-ANNOUNCEMENT = """\
-🕑 Il pulsante "Orario di stasera" ora si chiama <b>🕑 Orario</b>. Dentro trovate 🌙 <b>Orario di stasera</b> (come prima) e 📅 <b>Orario di apertura</b>, per cambiare l'orario normale di ogni giorno. Le modifiche all'orario di apertura vanno in 🚀 Pubblica modifiche.
-
-📋 <b>Promemoria</b>: completate e sistemate il menu da 🍔 Menu (voci mancanti, prezzi, descrizioni)."""
+ANNOUNCEMENT_ID = "2026-11-aggiornato"
+ANNOUNCEMENT = "🔄 <b>Bot aggiornato</b>"
 
 
 def announcement_due():
@@ -2267,6 +2519,7 @@ async def post_init(app: Application):
 
     await app.bot.set_my_commands([
         BotCommand("start", "Mostra i pulsanti"),
+        BotCommand("tavoli", "Ordini dei tavoli"),
         BotCommand("menu", "Modifica il menu"),
         BotCommand("eventi", "Eventi sul sito"),
         BotCommand("promozioni", "Promozioni sul sito"),
@@ -2324,6 +2577,7 @@ def main():
         "pubblica": publish_screen,
         "annulla": lambda u, c: more_action(u, c, "undo"),
         "stato": lambda u, c: more_action(u, c, "log"),
+        "tavoli": tables_screen,
         "prezzo": cmd_price,
         "nascondi": cmd_hide,
         "mostra": cmd_show,
