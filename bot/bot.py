@@ -517,6 +517,10 @@ async def handle_answer(update, context, raw, typed):
 
     step, ctx = awaiting["step"], awaiting["ctx"]
 
+    # Tavoli: ricerca e prodotto manuale
+    if step.startswith("tb_"):
+        return await table_answer(update, context, step, ctx, raw)
+
     # Prezzi: gestione a parte (uno o più numeri)
     if step in ("price", "add_price"):
         return await handle_price(update, context, step, ctx, raw)
@@ -1663,7 +1667,7 @@ HELP = """\
 
 Usa i pulsanti in basso 👇
 
-🍽️ <b>Tavoli</b> — tocca un tavolo → ➕ Aggiungi → categoria → prodotto (ogni tocco aggiunge 1). ✏️ Modifica per le quantità, 💶 Chiudi conto per liberare il tavolo. Gli ordini restano nel bot, non vanno sul sito.
+🍽️ <b>Tavoli</b> — tocca un tavolo → ➕ Aggiungi → 🔍 cerca o categoria → prodotto (ogni tocco aggiunge 1). In fondo: 🎱 gettone biliardo e ✍️ prodotto manuale (solo per quel tavolo, non va nel menu). ✏️ Modifica per le quantità, 💶 Chiudi conto per liberare il tavolo. Gli ordini restano nel bot, non vanno sul sito.
 📷 <b>Nuova locandina</b> — manda la foto (meglio come file 📎) e rispondi alle domande. Prima di pubblicare vedi l'anteprima.
 📅 <b>Eventi</b> · 🏷️ <b>Promozioni</b> — modifica titolo, data, ora, scadenza, oppure togli.
 🍔 <b>Menu</b> — categoria → voce → prezzo, nome, descrizione, homepage, nascondi, elimina. ➕ per aggiungere.
@@ -2001,6 +2005,9 @@ async def cmd_notice(update, context):
 #   tb:e:N                 modifica quantità
 #   tb:p:N:R / tb:m:N:R    +1 / -1 sulla riga R
 #   tb:x:N / tb:xy:N       chiudi conto / conferma
+#   tb:s:N                 cerca un prodotto (risposta scritta)
+#   tb:g:N                 gettone biliardo
+#   tb:o:N                 prodotto manuale (nome e prezzo scritti, non va nel menu)
 
 def table_lines_text(lines, index=None):
 
@@ -2066,15 +2073,84 @@ async def table_screen(update, context, n):
     await respond(update, text, keyboard(*rows, [("⬅️ Tavoli", "tb")]))
 
 
-async def table_categories(update, context, n):
+async def table_categories(update, context, n, added=None):
+
+    context.user_data.pop("awaiting", None)
 
     buttons = [(c["title"], f"tb:l:{n}:{c['id']}") for c in core.categories()]
 
+    text = f"🍽️ <b>Tavolo {n}</b> — aggiungi\nCerca un prodotto o scegli la categoria."
+
+    if added:
+        text = f"✅ Aggiunto: <b>{esc(added)}</b>\n\n" + text
+
+    await respond(update, text, keyboard(
+        [("🔍 Cerca prodotto", f"tb:s:{n}")],
+        *pairs(buttons),
+        [(f"🎱 {tables.TOKEN_NAME} · {format_price(tables.TOKEN_PRICE)}", f"tb:g:{n}")],
+        [("✍️ Prodotto manuale", f"tb:o:{n}")],
+        [(f"✅ Fine · Tavolo {n}", f"tb:t:{n}")],
+    ))
+
+
+async def table_search_results(update, context, n, query):
+
+    found = [
+        (category, item)
+        for category, item in search_items(query)
+        if item.get("available") is not False
+    ][:10]
+
+    if not found:
+        return await ask(
+            update, context, "tb_search", {"table": n},
+            f"🔍 Nessun prodotto trovato per «{esc(query)}». Scrivi un altro nome:",
+        )
+
+    rows = [
+        [(f"{item['name']} · {item_price(item)}"[:60],
+          f"tb:i:{n}:{category['id']}:{category['items'].index(item)}")]
+        for category, item in found
+    ]
+
     await respond(
         update,
-        f"🍽️ <b>Tavolo {n}</b> — aggiungi\nScegli la categoria.",
-        keyboard(*pairs(buttons), [(f"⬅️ Tavolo {n}", f"tb:t:{n}")]),
+        f"🔍 <b>Tavolo {n}</b> — risultati per «{esc(query)}»\nTocca per aggiungere 1.",
+        keyboard(*rows, [("🔍 Cerca ancora", f"tb:s:{n}"), ("⬅️ Categorie", f"tb:c:{n}")]),
     )
+
+
+async def table_answer(update, context, step, ctx, raw):
+    """Risposte scritte dei tavoli: ricerca, nome e prezzo del prodotto manuale."""
+
+    n = ctx["table"]
+    text = raw.strip()
+
+    if step == "tb_search":
+        if not text:
+            return await update.effective_message.reply_text("Scrivi il nome del prodotto, oppure premi ✖️ Annulla.")
+        context.user_data.pop("awaiting", None)
+        return await table_search_results(update, context, n, text)
+
+    if step == "tb_name":
+        if not text:
+            return await update.effective_message.reply_text("Il nome è vuoto. Riprova, oppure premi ✖️ Annulla.")
+        return await ask(
+            update, context, "tb_price", {"table": n, "name": text[:60]},
+            f"✍️ <b>{esc(text[:60])}</b>\n💶 Quanto costa? Scrivi il prezzo (es. 4,50)",
+        )
+
+    if step == "tb_price":
+        prices = core.parse_prices(text.replace(" ", "").split())
+        if len(prices) != 1 or prices[0] is None:
+            return await update.effective_message.reply_text(
+                "Non ho capito il prezzo. Scrivilo così: 4,50 — oppure premi ✖️ Annulla."
+            )
+        context.user_data.pop("awaiting", None)
+        qty = tables.add_manual(n, ctx["name"], prices[0])
+        return await table_categories(
+            update, context, n, added=f"{ctx['name']} · {format_price(prices[0])} — ora {qty}",
+        )
 
 
 def table_category(category_id):
@@ -2215,6 +2291,18 @@ async def table_action(update, context, rest):
 
     if action == "e":
         return await table_edit(update, context, n)
+
+    if action == "s":
+        return await ask(update, context, "tb_search", {"table": n},
+                         f"🔍 <b>Tavolo {n}</b> — scrivi il nome del prodotto (anche solo una parte):")
+
+    if action == "g":
+        qty = tables.add_token(n)
+        return await table_categories(update, context, n, added=f"{tables.TOKEN_NAME} — ora {qty}")
+
+    if action == "o":
+        return await ask(update, context, "tb_name", {"table": n},
+                         f"✍️ <b>Tavolo {n}</b> — prodotto manuale\nScrivi il nome (resta solo in questo ordine, non va nel menu):")
 
     if action in ("p", "m"):
         tables.change_qty(n, int(parts[2]), 1 if action == "p" else -1)

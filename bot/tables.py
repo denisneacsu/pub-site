@@ -22,6 +22,14 @@ TABLES_FILE = BOT_HOME / "tavoli.json"
 
 TABLE_COUNT = 15
 
+# Righe che non vengono dal menu: prezzo fisso, salvato nell'ordine.
+# Non si aggiungono mai a menu.json.
+EXTRA = "_extra"      # pulsanti fissi (gettone biliardo)
+MANUAL = "_manual"    # prodotto scritto a mano, solo per questo tavolo
+
+TOKEN_NAME = "Gettone biliardo"
+TOKEN_PRICE = 3
+
 
 # =========================================================
 # FILE
@@ -91,7 +99,8 @@ def priced_lines(lines, index=None):
 
     for line in lines:
 
-        found = index.get((line["cat"], line["name"]))
+        # Gettone e prodotti manuali: sempre il prezzo salvato
+        found = None if line["cat"].startswith("_") else index.get((line["cat"], line["name"]))
 
         if found:
             category, item = found
@@ -120,8 +129,12 @@ def table_total(lines, index=None):
 # MODIFICHE AGLI ORDINI
 # =========================================================
 
-def add_item(table, category, item, variant=None):
-    """Aggiunge 1 al tavolo; restituisce la quantità ora in ordine."""
+def add_line(table, new):
+    """
+    Aggiunge 1 al tavolo: se c'è già la stessa riga (stessa categoria,
+    nome, variante e, per le righe fuori menu, stesso prezzo) aumenta
+    la quantità. Restituisce la quantità ora in ordine.
+    """
 
     tables = read_tables()
 
@@ -130,25 +143,52 @@ def add_item(table, category, item, variant=None):
         "items": [],
     })
 
+    def same(line):
+        return (
+            line["cat"] == new["cat"]
+            and line["name"] == new["name"]
+            and line.get("variant") == new["variant"]
+            and (not new["cat"].startswith("_") or line.get("price") == new["price"])
+        )
+
     for line in entry["items"]:
-        if line["cat"] == category["id"] and line["name"] == item["name"] and line.get("variant") == variant:
+        if same(line):
             line["qty"] += 1
-            line["price"] = unit_price(item, variant)
+            line["price"] = new["price"]
             break
     else:
-        line = {
-            "cat": category["id"],
-            "name": item["name"],
-            "variant": variant,
-            "label": variant_label(category, variant),
-            "price": unit_price(item, variant),
-            "qty": 1,
-        }
+        line = dict(new, qty=1)
         entry["items"].append(line)
 
     write_tables(tables)
 
     return line["qty"]
+
+
+def add_item(table, category, item, variant=None):
+    """Prodotto del menu."""
+
+    return add_line(table, {
+        "cat": category["id"],
+        "name": item["name"],
+        "variant": variant,
+        "label": variant_label(category, variant),
+        "price": unit_price(item, variant),
+    })
+
+
+def add_token(table):
+    return add_line(table, {
+        "cat": EXTRA, "name": TOKEN_NAME, "variant": None, "label": None, "price": TOKEN_PRICE,
+    })
+
+
+def add_manual(table, name, price):
+    """Prodotto provvisorio scritto a mano: resta solo in questo ordine."""
+
+    return add_line(table, {
+        "cat": MANUAL, "name": name, "variant": None, "label": None, "price": price,
+    })
 
 
 def change_qty(table, position, delta):
